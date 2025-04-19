@@ -14,8 +14,6 @@ Example of answer: ["Dogs have 4 legs.", "Every paw has 4 fingers.", \
 "A dog has 16 fingers.", "So, the answer is 16."]
 {problem}"""
 
-problem = "Jackie grew 3\" over the summer.  She is now 2\" shorter than Anne, who is twice the size of Albert.  If Albert is 36\" tall, how tall was Jackie before summer?"
-
 def generate_cot_steps(problem, model = "gemma-3-27b-it"):
     prompt = PROMPT_TEMPLATE.format(problem = problem)
 
@@ -25,9 +23,6 @@ def generate_cot_steps(problem, model = "gemma-3-27b-it"):
     try:
         steps = ast.literal_eval(response.text)
     except:
-        print(response.text)
         print("error in parsing")
         return []
     return steps
-
-print(generate_cot_steps(problem))
