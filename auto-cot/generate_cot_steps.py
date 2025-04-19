@@ -1,7 +1,8 @@
 from google import genai
 import ast
+import os
 
-client = genai.Client(api_key="AIzaSyAWsCwIgB8MIUHobdz9u3YuQzUoiRIMj-c")
+client = genai.Client(api_key = os.environ.get("GOOGLE_API_KEY"))
 
 PROMPT_TEMPLATE = """Given the problem below write the solution. Think step by \
 step and write the solution in a format of an array of strings like this: \
