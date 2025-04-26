@@ -39,7 +39,7 @@ def _load_few_shots(folder_path: str = "../auto-cot/gsm8k_few_shot/", n_shots: i
 
 def _format_one_shot(shot: dict) -> str:
     return f"Q: {shot['question']}\n" \
-           f"A: {shot['cot_steps']}\n\n"
+           f"A: {json.dumps(shot['cot_steps'])}\n\n"
 
 
 def build_prompt(question: str, folder_path: str = "../auto-cot/gsm8k_few_shot", n_shots: int = 8,
@@ -54,14 +54,21 @@ def build_prompt(question: str, folder_path: str = "../auto-cot/gsm8k_few_shot",
     """
     # Add few shot examples
     few_shots = _load_few_shots(folder_path, n_shots)
-    formatted_few_shots = "\n\n".join([_format_one_shot(shot) for shot in few_shots])
+    formatted_few_shots = "".join([_format_one_shot(shot) for shot in few_shots])
 
     prompt_chains = []
     # Diversify
     random.shuffle(DIVERSIFICATION)
     for c in range(n_chains):
         expert = DIVERSIFICATION[c % len(DIVERSIFICATION)]
-        prompt = f"{formatted_few_shots}\n\nQ: Think like {expert} and solve the problem. {question}\nA: "
+        prompt = f"""Given the problem below write the solution. Think step by \
+step and write the solution in a format of an array of strings like this: \
+["step_1", "step_2", ..., "step_n"]. Every step should contain just the content \
+of the reasoning and nothing else. Use double quotes for the steps. \
+Last step needs to have the answer as last item. Do not write json, python or \
+markdown. The text of the last step needs to have the answer at the end.\n\n\
+{formatted_few_shots}Q: Think like {expert} \
+and solve the problem. {question}\nA: """
         prompt_chains.append(prompt)
 
     return prompt_chains
