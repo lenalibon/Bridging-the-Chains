@@ -1,10 +1,6 @@
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, StoppingCriteria, StoppingCriteriaList
 
-model_name = "google/gemma-2-2b-it"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForCausalLM.from_pretrained(model_name).cuda()
-
 
 class CountingStoppingCriteria(StoppingCriteria):
     def __init__(self, stop_token_id: int, max_count: int):
@@ -20,6 +16,8 @@ class CountingStoppingCriteria(StoppingCriteria):
 
 
 def generate_for_k_steps(
+        model,
+        tokenizer,
         prompt: str,
         stop_str: str = '.",',
         k_steps: int = 2,
@@ -56,6 +54,7 @@ def generate_for_k_steps(
 
 
 def resume_generation(
+        model,
         sequences: torch.LongTensor,
         past_key_values: tuple,
         additional_max_new_tokens: int = 128,
@@ -82,6 +81,9 @@ def resume_generation(
 
 
 if __name__ == "__main__":
+    model_name = "google/gemma-2-2b-it"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name).cuda()
     prompt = """Given the problem below write the solution. Think step by step and write the solution in a format of an array of strings like this: ["step_1", "step_2", ..., "step_n"]. Every step should contain just the content of the reasoning and nothing else. Use double quotes for the steps. Last step needs to have the answer as last item. Do not write json, python or markdown. The text of the last step needs to have the answer at the end.
 
 Q: A candle melts by 2 centimeters every hour that it burns. How many centimeters shorter will a candle be after burning from 1:00 PM to 5:00 PM?
@@ -101,10 +103,10 @@ A: ["First, calculate Jill's weekly earnings from teaching.", "She earns $20 per
 
 Q: Think like Prof. Kaur, a computer vision and pattern recognition researcher and solve the problem. How many fingers does a dog have?
 A: """
-    chain, pkv, n_seen = generate_for_k_steps(prompt, stop_str='.",', k_steps=2, max_new_tokens=100)
+    chain, pkv, n_seen = generate_for_k_steps(model, tokenizer, prompt, stop_str='.",', k_steps=2, max_new_tokens=100)
     print(f"Generation stopped after seeing stop‐symbol {n_seen} times.")
     print(tokenizer.decode(chain[0], skip_special_tokens=False))
 
-    chain_res, pkv_res = resume_generation(chain, pkv, additional_max_new_tokens=50)
+    chain_res, pkv_res = resume_generation(model, chain, pkv, additional_max_new_tokens=50)
     print("\nContinuation:")
     print(tokenizer.decode(chain_res[0], skip_special_tokens=False))
