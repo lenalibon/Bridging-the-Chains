@@ -1,16 +1,17 @@
-from typing import Iterable
+from typing import Iterable, Optional
 import fire
 import datasets
 import torch
 import json
 
 import itertools
+import logging
 
 from datetime import datetime
 from functools import partial
 from pathlib import Path
 
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, GenerationConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, GenerationConfig, Cache
 
 ChainTensor = torch.Tensor # ?
 # Chains = Iterable[Chain]
@@ -57,14 +58,15 @@ class Method:
         self.merge_after = merge_after
         self.label = label or self.__class__.__name__
 
-        stop_token_ids = tokenizer.convert_tokens_to_ids('\n') + [tokenizer.eos_token_id]
-        gen_config = GenerationConfig(
+        self.stop_token_ids = [tokenizer.convert_tokens_to_ids('\n'), tokenizer.eos_token_id]
+        logger.debug(self.stop_token_ids)
+        self.gen_config = GenerationConfig(
             max_new_tokens=512,
             do_sample=True,
             temperature=0.9,
             cache_implementation=None,
             return_dict_in_generate=True,
-            eos_token_id=stop_token_ids,
+            eos_token_id=self.stop_token_ids,
         )
 
  
@@ -74,32 +76,32 @@ class Method:
         prompt_offset: int = tokenlen(self.tokenizer, prompt)
         chains: ChainsTensor
         scores: torch.Tensor
-        chains, scores = self.first_step(prompt)
+        chains, scores, pkv = self.first_step(prompt)
         counter = 1
         while not ChainsTensorUtils.all_complete(chains):
             if self.merge_every and counter % self.merge_every == 0:
-                chain_id_clusters = self.cluster(chains)
+                chain_id_clusters = self.clusterer(chains)
                 # chain_clusters = [[ChainsTensorUtils.get(chains, chain_id) for chain_id in id_cluster] for id_cluster in chain_id_clusters]
                 # chains = ChainsTensorUtils.from_list([ self.merger(cluster, offset=prompt_offset) for cluster in chain_clusters ])
                 chains = self.merger(chains, scores, offset=prompt_offset)
-            chains, scores = self.next_step(chains)
+            chains, scores, pkv = self.next_step(chains)
             counter += 1
         
         if self.merge_after:
             raise NotImplementedError("TODO")
 
-    def first_step(self, prompt: str) -> tuple[ChainsTensor, torch.Tensor]:
+    def first_step(self, prompt: str) -> tuple[ChainsTensor, torch.Tensor, Cache]:
         input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(DEVICE)
-        pkv = None
-        out = self.model.generate(input_ids,
-                             past_key_values=pkv,
-                             generation_config=self.gen_config)
-        pkv = out.past_key_values
-        input_ids = out.sequences
-           
+        return self.next_step(input_ids, pkv=None)
 
-
-
+    def next_step(self, chains: ChainsTensor, pkv: Optional[Cache] = None) -> tuple[ChainsTensor, torch.Tensor, Cache]:
+        input_ids = chains
+        out = self.model.generate(input_ids, past_key_values=pkv, generation_config=self.gen_config)
+        new_pkv = out.past_key_values
+        output_ids = out.sequences
+        scores = out.scores
+        return output_ids, scores, new_pkv
+    
 
 class MergeFunction:
     def __call__(self, chains: list[ChainTensor], offset: int = 0) -> ChainTensor:
@@ -115,7 +117,7 @@ class Merger:
     """
     Merger receives the chains, their scores, a nested list of chain indices (clusters), and returns a set of chains (may be a singleton)
     """
-    def __init__(self, merge_fn):
+    def __init__(self, merge_fn: MergeFunction):
         """merge_fn is a function that takes a list of chains and returns a single chain (may be concatenation or summarization-based)"""
         self.merge_fn = merge_fn
 
@@ -215,7 +217,22 @@ def get_timestamp():
 
 def flat(nested):
     return itertools.chain.from_iterable(nested)
+
+
+def print_tokens_batch(tokenizer, batch_output_ids):
+    """Print a per-token decoding"""
+    for i, token_id in enumerate(batch_output_ids):
+        token_str = tokenizer.decode(token_id, skip_special_tokens=False)
+        print(f'{i:03d}: {repr(token_str)}')
+
+def print_decode_batch(tokenizer, batch_output_ids):
+    print(tokenizer.decode(batch_output_ids))
         
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
            
+# Usage: python -m core.main eval
 if __name__ == "__main__":
+    # logging.basicConfig(level=logging.DEBUG)
     fire.Fire(Experiment)
