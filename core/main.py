@@ -1,4 +1,4 @@
-from typing import Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 import fire
 import datasets
 import torch
@@ -11,28 +11,109 @@ from datetime import datetime
 from functools import partial
 from pathlib import Path
 
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, GenerationConfig, Cache
+from functools import cache
 
-ChainTensor = torch.Tensor # ?
-# Chains = Iterable[Chain]
-ChainsTensor = torch.Tensor
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, GenerationConfig, Cache, HybridCache
+
+from torch import Tensor
+
+
+from .utils import SIMPLE_PROMPT_TEMPLATE
+
+ChainTensor = torch.Tensor # size: (sequence_length,)
+ChainsTensor = torch.Tensor # size: (batch_size, sequence_length)
+
+# NOTE: for some reason torch stores scores as a tuple of tensors, not a single tensor
+Scores = tuple[torch.Tensor] # size: (sequence_length, (batch_size, vocab_size))
+IdCluster = list[int] # list of chain ids
+DataGetter = Callable[[], tuple['Dataset', str]] # function that returns a dataset and its label
+
 
 DEVICE = "cuda"
+MAX_NEW_TOKENS = 256
+TEMPERATURE = 0.9
 
 
-class ChainsTensorUtils:
+@cache
+def get_newline_token_id(tokenizer):
+    """Get the token id for the newline character"""
+    newline_token = tokenizer("\n")["input_ids"][0]
+    if isinstance(newline_token, list):
+        newline_token = newline_token[0]
+    return newline_token
+
+class Chain:
+    def __init__(self, tokenizer, token_ids: ChainTensor, prompt_offset: int):
+        self.tokenizer = tokenizer
+        self.token_ids = token_ids
+        self.prompt_offset = prompt_offset
+
+    # TODO implement reference-based scores wrt Chains if needed for perf reasons
+
+    def is_complete(self, end = '\n  ]\n') -> bool:
+        max_end_len = len(end)
+        pad_token = self.tokenizer.pad_token_id
+        # NOTE: unpadding can be optimized
+        decoded_chain_end = self.tokenizer.decode(self.token_ids[self.token_ids != pad_token][-max_end_len:])
+        return decoded_chain_end.endswith(end)
+
+    def get_lines_as_token_ids(self):
+        tensors = tensor_split(self.token_ids, get_newline_token_id(self.tokenizer))
+        return tensors
+
+    def get_clean_text(self) -> str:
+        decoded = self.tokenizer.decode(self.token_ids[self.prompt_offset:], skip_special_tokens=True)
+        # HACK TODO refactor with regex
+        pyrepr = "[" + decoded
+        # logger.debug(f"pyrepr:\n{pyrepr}")
+        steps: list[str] = eval(pyrepr)
+        assert isinstance(steps, list), f"Expected a list, got {type(steps)}"
+        return ' '.join(steps)
+
+    def as_chains(self) -> 'Chains':
+        raise NotImplementedError("TODO")
+
+
+def tensor_split(x: Tensor, delimiter: int) -> Iterable[Tensor]:
+    delimiter_indices = torch.where(x == delimiter)[0]
+    starts = torch.cat([torch.tensor([-1]), delimiter_indices])
+    ends = torch.cat([delimiter_indices, torch.tensor([len(x)])])
+    sub_tensors = [x[s+1:e] for s, e in zip(starts, ends) if e - s > 1]
+    return sub_tensors
+        
+ 
+class Chains:
     """
-    Methods for working with chains (as a tensor of token ids). 
-    Chains are assumed to be represented as a tensor of shape (batch_size, sequence_length),
+    Representation of a batch of reasoning chains for a single question.
+    Internally represented as a tensor of token ids, of shape (batch_size, sequence_length),
     where `batch_size` is the number of chains and `sequence_length` is the length of each chain (in tokens, including the prompt)
+
+    Probability scores and past-key-values (KV-cache) are stored as well.
     """
-    @staticmethod
-    def all_complete(chains: ChainsTensor) -> bool:
-        raise NotImplementedError("TODO")
+    def __init__(self, tokenizer: AutoTokenizer, token_ids: ChainsTensor, prompt_offset: int,
+                 scores: Optional[Scores] = tuple(), pkv: Optional[Cache] = None):
+        self.tokenizer = tokenizer
+        self.token_ids = token_ids
+        self.prompt_offset = prompt_offset
+        self.scores = scores
+        self.pkv = pkv
+    
+    def all_complete(self) -> bool:
+        # NOTE: assuming a chain is complete if `  ]\n` was generated (omitting padding)
+        # NOTE: this won't work if the model breaks the JSON format
+        return all(self[i].is_complete() for i in range(len(self)))
+
+    def __getitem__(self, chain_id: int) -> Chain:
+        # TODO what about scores?
+        return Chain(self.tokenizer, self.token_ids[chain_id], self.prompt_offset)
+
+    def __len__(self) -> int:
+        return self.token_ids.shape[0]
 
     @staticmethod
-    def get(chains: ChainsTensor, chain_id: int) -> ChainTensor:
+    def from_list(chain_list: list[Chain]):
         raise NotImplementedError("TODO")
+
 
 # ### Summary of the planned Methods
 # - BaselineGreedy: select the answer from the single chain with the highest probability without merging or clustering.
@@ -46,9 +127,8 @@ class ChainsTensorUtils:
 
 
 class Method:
-    def __init__(self, model, tokenizer, prompter, clusterer, merger,
-                 merge_every=False, merge_after=False, label=None,
-                 gen_config=None):
+    def __init__(self, model, tokenizer: AutoTokenizer, prompter, clusterer, merger,
+                 merge_every=False, merge_after=False, label=None):
         self.model = model
         self.tokenizer = tokenizer
         self.prompter = prompter
@@ -58,95 +138,124 @@ class Method:
         self.merge_after = merge_after
         self.label = label or self.__class__.__name__
 
+        # WARNING: possibly not all tokenizers tokenize newlines the "right way": tokens for `\n`, `\n\n`, `\n\n\n`, etc.
         self.stop_token_ids = [tokenizer.convert_tokens_to_ids('\n'), tokenizer.eos_token_id]
-        logger.debug(self.stop_token_ids)
+        stop_tokens = tokenizer.convert_ids_to_tokens(self.stop_token_ids)
+        logger.debug(f"{stop_tokens=}")
         self.gen_config = GenerationConfig(
-            max_new_tokens=512,
+            max_new_tokens=MAX_NEW_TOKENS,
             do_sample=True,
-            temperature=0.9,
+            temperature=TEMPERATURE,
             cache_implementation=None,
             return_dict_in_generate=True,
+            output_scores=True,
             eos_token_id=self.stop_token_ids,
         )
+        # NOTE: On the difference between `scores` and `logits`, see https://huggingface.co/docs/transformers/v4.51.3/en/internal/generation_utils#transformers.generation.GenerateDecoderOnlyOutput
 
- 
-
-    def generate_answer(self, question):
+    def generate_answer(self, question: str) -> Chain:
+        # NOTE: assuming generate_answer returns a single chain
         prompt: str = self.prompter(question)
-        prompt_offset: int = tokenlen(self.tokenizer, prompt)
-        chains: ChainsTensor
-        scores: torch.Tensor
-        chains, scores, pkv = self.first_step(prompt)
+        logger.debug(f"==== prompt  ====\n {prompt}")
+        logger.debug(f"=================")
+        chains: Chains = self.first_step(prompt)
         counter = 1
-        while not ChainsTensorUtils.all_complete(chains):
+        while not chains.all_complete():
             if self.merge_every and counter % self.merge_every == 0:
                 chain_id_clusters = self.clusterer(chains)
-                # chain_clusters = [[ChainsTensorUtils.get(chains, chain_id) for chain_id in id_cluster] for id_cluster in chain_id_clusters]
-                # chains = ChainsTensorUtils.from_list([ self.merger(cluster, offset=prompt_offset) for cluster in chain_clusters ])
-                chains = self.merger(chains, scores, offset=prompt_offset)
-            chains, scores, pkv = self.next_step(chains)
+                # chain_clusters = [[chains[chain_id] for chain_id in id_cluster] for id_cluster in chain_id_clusters]
+                # chains = Chains.from_list([ self.merger(cluster, offset=prompt_offset) for cluster in chain_clusters ])
+                chains = self.merger(chains)
+            chains = self.next_step(chains)
             counter += 1
         
         if self.merge_after:
             raise NotImplementedError("TODO")
 
-    def first_step(self, prompt: str) -> tuple[ChainsTensor, torch.Tensor, Cache]:
-        input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(DEVICE)
-        return self.next_step(input_ids, pkv=None)
+        if len(chains) == 1:
+            return chains[0]
+        else:
+            raise NotImplementedError("TODO")
+            
 
-    def next_step(self, chains: ChainsTensor, pkv: Optional[Cache] = None) -> tuple[ChainsTensor, torch.Tensor, Cache]:
-        input_ids = chains
-        out = self.model.generate(input_ids, past_key_values=pkv, generation_config=self.gen_config)
-        new_pkv = out.past_key_values
-        output_ids = out.sequences
-        scores = out.scores
-        return output_ids, scores, new_pkv
+    def first_step(self, prompt: str) -> Chains:
+        input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(DEVICE)
+        prompt_offset = input_ids.shape[1]
+        out = self.model.generate(input_ids, past_key_values=None, generation_config=self.gen_config)
+        chains = Chains(self.tokenizer,
+                        out.sequences,
+                        prompt_offset=prompt_offset,
+                        scores=out.scores,
+                        pkv=out.past_key_values)
+        self.print_tokens(chains)
+        return chains
+    
+
+    def next_step(self, chains: Chains) -> Chains:
+        out = self.model.generate(chains.token_ids,
+                                  cache_implementation=None,
+                                  past_key_values=chains.pkv,
+                                  generation_config=self.gen_config)
+        chains.pkv = out.past_key_values
+        chains.token_ids = out.sequences
+        # Append the new scores (tuple of tensors) to the existing scores
+        assert chains.scores is not None, f"Scores should not be None, got {chains.scores}"
+        chains.scores += out.scores
+        self.print_tokens(chains)
+        return chains
+
+    def print_tokens(self, chains: Chains) -> None:
+        # logger.debug(f"{chains.prompt_offset=}")
+        for i, text in enumerate(self.tokenizer.batch_decode(chains.token_ids[:, chains.prompt_offset:])):
+            logger.debug(f"=== next[{i}] ===\n {text}")
+            logger.debug(f"=================")
     
 
 class MergeFunction:
-    def __call__(self, chains: list[ChainTensor], offset: int = 0) -> ChainTensor:
+    """Return a single chain from a list of chains"""
+    def __call__(self, chain_list: list[Chain]) -> Chain:
         raise NotImplementedError("MergeFunction __call__ should be implemented in subclasses")
 
 
 class SummarizingMergeFunction(MergeFunction):
-    def __call__(self, chains: list[ChainTensor], offset: int = 0) -> ChainTensor:
+    def __call__(self, chain_list: list[Chain]) -> Chain:
         raise NotImplementedError("TODO")
         
 
 class Merger:
     """
-    Merger receives the chains, their scores, a nested list of chain indices (clusters), and returns a set of chains (may be a singleton)
+    Merger receives the chains, (incl. their scores), a nested list of chain indices (clusters), and returns a set of chains (may be a singleton)
     """
     def __init__(self, merge_fn: MergeFunction):
         """merge_fn is a function that takes a list of chains and returns a single chain (may be concatenation or summarization-based)"""
         self.merge_fn = merge_fn
 
-    def __call__(self, chains, scores, chain_id_clusters, offset: int = 0) -> ChainsTensor:
+    def __call__(self, chains: Chains, chain_id_clusters: list[IdCluster]) -> Chains:
         raise NotImplementedError("Merger __call__ should be implemented in subclasses")
 
 
 class MergerMaxProb(Merger):
-    def __call__(self, chains, scores, chain_id_clusters, offset = 0):
-        return self.merge_fn([ self.get_max_prob_chain(chains, scores, cluster, offset=offset) for cluster in chain_id_clusters ])
+    def __call__(self, chains: Chains, chain_id_clusters: list[IdCluster]) -> Chains:
+        return self.merge_fn([ self.get_max_prob_chain(chains, id_cluster) for id_cluster in chain_id_clusters ]).as_chains()
 
-    def get_max_prob_chain(self, chains, scores, cluster, offset: int = 0) -> ChainTensor:
+    def get_max_prob_chain(self, chains: Chains, id_cluster: IdCluster) -> Chain:
         raise NotImplementedError("TODO")
 
 
 class MergerClusterCentroid(Merger):
-    def __call__(self, chains, scores, chain_id_clusters, offset: int = 0):
-        # TODO persist cluster centroid from clusterer
-        return self.merge_fn([ self.get_closest_to_cluster_centroids(chains, cluster, offset=offset) for cluster in chain_id_clusters ])
+    def __call__(self, chains: Chains, chain_id_clusters: list[IdCluster]) -> Chains:
+        # TODO persist and pass cluster centroids from similarity clusterer?
+        return self.merge_fn([ self.get_closest_to_cluster_centroids(chains, cluster) for cluster in chain_id_clusters ]).as_chains()
 
-    def get_closest_to_cluster_centroids(self, chains, cluster, offset: int = 0) -> ChainTensor:
+    def get_closest_to_cluster_centroids(self, chains: Chains, id_cluster: IdCluster) -> Chain:
         raise NotImplementedError("TODO")
 
 
 class MergerWithinCluster(Merger):
-    def __call__(self, chains, scores, chain_id_clusters, offset: int = 0):
-        return ChainsTensorUtils.from_list([ self.merge_fn(self.get_chain_cluster(chains, id_cluster)) for id_cluster in chain_id_clusters ])
+    def __call__(self, chains, chain_id_clusters) -> Chains:
+        return Chains.from_list([ self.merge_fn(self.get_chain_cluster(chains, id_cluster)) for id_cluster in chain_id_clusters ])
 
-    def get_chain_cluster(self, chains, id_cluster) -> list[ChainTensor]:
+    def get_chain_cluster(self, chains, id_cluster) -> list[Chain]:
         raise NotImplementedError("TODO")
     
 
@@ -158,12 +267,17 @@ class BaselineGreedy(Method):
         self.merger = None
 
 
+class SimplePrompter:
+    def __call__(self, question):
+        return SIMPLE_PROMPT_TEMPLATE.format(question=question)
+
+
 class Experiment:
     def eval(self, **kwargs):
-        print("Running full evaluation...")
-        data_getters = [partial(self.get_gsm8k, n=10)] # FIXME delete n=10
+        logger.info("Running full evaluation...")
+        data_getters: list[DataGetter] = [partial(self.get_gsm8k, n=2)] # FIXME delete n=
         model, tokenizer = self.get_model_and_tokenizer()
-        prompter = lambda x: x # FIXME: TODO use autocot
+        prompter = SimplePrompter() # FIXME: TODO use autocot
         methods = [BaselineGreedy(model, tokenizer, prompter, label="BaselineGreedy_gemma3-1b-it-8bit_no-autocot")]
         for get_data in data_getters:
             eval_data, dataset_label = get_data()
@@ -176,23 +290,23 @@ class Experiment:
         for i, sample in enumerate(eval_data):
             question = sample['question']
             true_answer = sample['answer']
-            pred_chain = method.generate_answer(question)
+            pred_chain: Chain = method.generate_answer(question)
             # NOTE: roscoe's gsm8k.json is different
             results.append({
                 "premise": question,
-                "reasoning": pred_chain,
+                "reasoning": pred_chain.get_clean_text(),
                 "true_answer": true_answer,
             })
         Path("results").mkdir(parents=True, exist_ok=True)
         ts = get_timestamp()
         write_jsonl(results, f"results/{label}___{ts}.jsonl")
         
-    def get_gsm8k(self, n=None):
+    def get_gsm8k(self, n=None) -> tuple[Any, str]:
         # NOTE: using the train split for evaluation
         split = datasets.load_dataset("gsm8k", "main")["test"]
         if n is not None:
             split = split.select(range(n))
-        return split, "gsm8k"
+        return (split, "gsm8k")
 
     def get_model_and_tokenizer(self):
         model_name = "google/gemma-3-1b-it"
@@ -229,10 +343,12 @@ def print_decode_batch(tokenizer, batch_output_ids):
     print(tokenizer.decode(batch_output_ids))
         
 
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+logger.debug("logger initialized!")
            
-# Usage: python -m core.main eval
+# Usage: python -m core.main
 if __name__ == "__main__":
     # logging.basicConfig(level=logging.DEBUG)
-    fire.Fire(Experiment)
+    fire.Fire(Experiment().eval)
