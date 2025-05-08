@@ -37,7 +37,6 @@ class ExactMatchEvaluator:
     
     def evaluate(self, input_file: str):
         results = []
-        correct = 0
         with open(input_file, 'r', encoding='utf-8') as f:
             lines = f.readlines()
 
@@ -50,8 +49,6 @@ class ExactMatchEvaluator:
             )[1]
 
             predicted = self.evaluate_answer(problem, answer, ground_truth)
-            print(predicted)
-            print(item['answer'])
             answer = True if item['answer'] == 'yes' else False
             correct += predicted == answer
 
@@ -61,6 +58,5 @@ class ExactMatchEvaluator:
             })
         
 
-        print(correct / len(results))
         print(f"Evaluated {len(results)} examples.")
         return results
