@@ -49,8 +49,6 @@ class ExactMatchEvaluator:
             )[1]
 
             predicted = self.evaluate_answer(problem, answer, ground_truth)
-            answer = True if item['answer'] == 'yes' else False
-            correct += predicted == answer
 
             results.append({
                 "key": item.get("key", ""),

@@ -4,10 +4,12 @@ import argparse
 import os
 import json
 
-from exact_match.exact_match import ExactMatchEvaluator
+from exact_match.exact_match_evaluator import ExactMatchEvaluator
+from f1_score.f1_score_evaluator import F1ScoreEvaluator
 from roscoe.roscoe import ReasoningEvaluator
 from roscoe.score import SENT_TRANS
 from roscoe.utils import save_scores, print_and_reset_max_gpu_memory
+from dotenv import load_dotenv
 
 # Placeholder imports (you must implement or replace these)
 #from metrics.bert import compute_bert_score  # Assume function exists
@@ -43,16 +45,23 @@ def run_bert_score(in_file):
     print(f"Running BERTScore on {in_file}")
     #return compute_bert_score(in_file)
 
-def run_f1_score(in_file):
-    print(f"Running F1 score on {in_file}")
-    #return compute_f1_score(in_file)
+def run_f1_score(input_path):
+    print(f"Running F1 score on {input_path}")
+    evaluator = F1ScoreEvaluator()
+    results = evaluator.evaluate(input_path)
+
+    output_file = input_path.replace(".json", "_f1_results.jsonl")
+    with open(output_file, "w", encoding="utf-8") as f:
+        for item in results:
+            f.write(json.dumps(item) + "\n")
+
+    print(f"F1 score results written to {output_file}")
 
 def run_exact_match(input_path):
     print(f"Running Exact Match evaluation on {input_path}")
     evaluator = ExactMatchEvaluator(model="gemma-3-27b-it")
     results = evaluator.evaluate(input_path)
 
-    # Save results
     output_file = input_path.replace(".json", "_em_results.jsonl")
     with open(output_file, "w", encoding="utf-8") as f:
         for item in results:
@@ -76,6 +85,7 @@ if __name__ == "__main__":
     parser.add_argument("--roscoe-scores", nargs="*", default=["fluency", "coherence", "discourse", "relevance"])
 
     args = parser.parse_args()
+    load_dotenv()
 
     fpath = args.input_path
 
