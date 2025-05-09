@@ -1,3 +1,13 @@
+from datetime import datetime
+from functools import cache
+import itertools
+import json
+from typing import Iterable
+
+from torch import Tensor
+import torch
+
+
 def escape_braces(template):
     '''Templates with braces must be escaped for formatting to work: } becomes }} and { becomes {{, except for the placeholder {question} which must be kept as is.'''
     tmp_str = 'PLACEHOLDER_ASDF'
@@ -23,3 +33,49 @@ _SIMPLE_PROMPT_TEMPLATE = '''You are a math tutor. You will be given a math ques
 
 SIMPLE_PROMPT_TEMPLATE = escape_braces(_SIMPLE_PROMPT_TEMPLATE)
     
+
+@cache
+def get_newline_token_id(tokenizer):
+    """Get the token id for the newline character"""
+    newline_token = tokenizer("\n")["input_ids"][0]
+    if isinstance(newline_token, list):
+        newline_token = newline_token[0]
+    return newline_token
+
+
+def tokenlen(tokenizer, prompt: str) -> int:
+    return len(tokenizer(prompt)["input_ids"])
+
+
+def write_jsonl(data, path, indent=None):
+    with open(path, "w") as f:
+        for item in data:
+            f.write(json.dumps(item, indent=None) + "\n")
+
+
+def get_timestamp():
+    return datetime.now().strftime('%Y%m%d%H%M')
+
+
+def flat(nested):
+    return itertools.chain.from_iterable(nested)
+
+
+def print_tokens_batch(tokenizer, batch_output_ids):
+    """Print a per-token decoding"""
+    for i, token_id in enumerate(batch_output_ids):
+        token_str = tokenizer.decode(token_id, skip_special_tokens=False)
+        print(f'{i:03d}: {repr(token_str)}')
+
+
+def print_decode_batch(tokenizer, batch_output_ids):
+    print(tokenizer.decode(batch_output_ids))
+ 
+
+def tensor_split(x: Tensor, delimiter: int) -> Iterable[Tensor]:
+    delimiter_indices = torch.where(x == delimiter)[0]
+    starts = torch.cat([torch.tensor([-1]), delimiter_indices])
+    ends = torch.cat([delimiter_indices, torch.tensor([len(x)])])
+    sub_tensors = [x[s+1:e] for s, e in zip(starts, ends) if e - s > 1]
+    return sub_tensors
+ 

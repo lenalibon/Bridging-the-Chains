@@ -1,24 +1,19 @@
-from typing import Any, Callable, Iterable, Optional
-import fire
-import datasets
-import torch
-import json
 
-import itertools
+import fire
 import logging
 
-from datetime import datetime
 from functools import partial
 from pathlib import Path
+from typing import Any, Callable, Iterable, Optional
 
-from functools import cache
+import datasets
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, GenerationConfig, Cache
 
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, GenerationConfig, Cache, HybridCache
-
+import torch
 from torch import Tensor
 
+from .utils import SIMPLE_PROMPT_TEMPLATE, get_newline_token_id, write_jsonl, get_timestamp, tensor_split
 
-from .utils import SIMPLE_PROMPT_TEMPLATE
 
 ChainTensor = torch.Tensor # size: (sequence_length,)
 ChainsTensor = torch.Tensor # size: (batch_size, sequence_length)
@@ -33,14 +28,6 @@ DEVICE = "cuda"
 MAX_NEW_TOKENS = 256
 TEMPERATURE = 0.9
 
-
-@cache
-def get_newline_token_id(tokenizer):
-    """Get the token id for the newline character"""
-    newline_token = tokenizer("\n")["input_ids"][0]
-    if isinstance(newline_token, list):
-        newline_token = newline_token[0]
-    return newline_token
 
 class Chain:
     def __init__(self, tokenizer, token_ids: ChainTensor, prompt_offset: int):
@@ -72,15 +59,7 @@ class Chain:
 
     def as_chains(self) -> 'Chains':
         raise NotImplementedError("TODO")
-
-
-def tensor_split(x: Tensor, delimiter: int) -> Iterable[Tensor]:
-    delimiter_indices = torch.where(x == delimiter)[0]
-    starts = torch.cat([torch.tensor([-1]), delimiter_indices])
-    ends = torch.cat([delimiter_indices, torch.tensor([len(x)])])
-    sub_tensors = [x[s+1:e] for s, e in zip(starts, ends) if e - s > 1]
-    return sub_tensors
-        
+       
  
 class Chains:
     """
@@ -95,6 +74,7 @@ class Chains:
         self.tokenizer = tokenizer
         self.token_ids = token_ids
         self.prompt_offset = prompt_offset
+        # May be more efficient to use a list[Tensor] for scores
         self.scores = scores
         self.pkv = pkv
     
@@ -262,6 +242,15 @@ class MergerWithinCluster(Merger):
 class BaselineGreedy(Method):
     """Select the answer from the single chain with the highest probability without merging or clustering"""
     def __init__(self, model, tokenizer, prompter, **kwargs):
+        raise NotImplementedError("TODO")
+        super().__init__(model, tokenizer, prompter, None, None, **kwargs)
+        self.clusterer = None
+        self.merger = None
+
+
+class BaselineSimple(Method):
+    "No branching, no clustering, no merging"
+    def __init__(self, model, tokenizer, prompter, **kwargs):
         super().__init__(model, tokenizer, prompter, None, None, **kwargs)
         self.clusterer = None
         self.merger = None
@@ -275,10 +264,10 @@ class SimplePrompter:
 class Experiment:
     def eval(self, **kwargs):
         logger.info("Running full evaluation...")
-        data_getters: list[DataGetter] = [partial(self.get_gsm8k, n=2)] # FIXME delete n=
+        data_getters: list[DataGetter] = [partial(self.get_gsm8k, n=3)] # FIXME delete n=
         model, tokenizer = self.get_model_and_tokenizer()
         prompter = SimplePrompter() # FIXME: TODO use autocot
-        methods = [BaselineGreedy(model, tokenizer, prompter, label="BaselineGreedy_gemma3-1b-it-8bit_no-autocot")]
+        methods = [BaselineSimple(model, tokenizer, prompter, label="BaselineSimple-1b-it-8bit_no-autocot")]
         for get_data in data_getters:
             eval_data, dataset_label = get_data()
             for method in methods:
@@ -301,7 +290,7 @@ class Experiment:
         ts = get_timestamp()
         write_jsonl(results, f"results/{label}___{ts}.jsonl")
         
-    def get_gsm8k(self, n=None) -> tuple[Any, str]:
+    def get_gsm8k(self, n=None) -> tuple['Dataset', str]:
         # NOTE: using the train split for evaluation
         split = datasets.load_dataset("gsm8k", "main")["test"]
         if n is not None:
@@ -315,38 +304,11 @@ class Experiment:
         return model, tokenizer
     
 
-def tokenlen(tokenizer, prompt: str) -> int:
-    return len(tokenizer(prompt)["input_ids"])
-
-
-def write_jsonl(data, path, indent=None):
-    with open(path, "w") as f:
-        for item in data:
-            f.write(json.dumps(item, indent=None) + "\n")
-
-
-def get_timestamp():
-    return datetime.now().strftime('%Y%m%d%H%M')
-
-
-def flat(nested):
-    return itertools.chain.from_iterable(nested)
-
-
-def print_tokens_batch(tokenizer, batch_output_ids):
-    """Print a per-token decoding"""
-    for i, token_id in enumerate(batch_output_ids):
-        token_str = tokenizer.decode(token_id, skip_special_tokens=False)
-        print(f'{i:03d}: {repr(token_str)}')
-
-def print_decode_batch(tokenizer, batch_output_ids):
-    print(tokenizer.decode(batch_output_ids))
-        
-
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logger.debug("logger initialized!")
+
            
 # Usage: python -m core.main
 if __name__ == "__main__":
