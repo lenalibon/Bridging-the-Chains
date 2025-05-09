@@ -78,4 +78,22 @@ def tensor_split(x: Tensor, delimiter: int) -> Iterable[Tensor]:
     ends = torch.cat([delimiter_indices, torch.tensor([len(x)])])
     sub_tensors = [x[s+1:e] for s, e in zip(starts, ends) if e - s > 1]
     return sub_tensors
+
+
+def shift_padding_left(x, pad_token=0):
+    # x: (batch_size, seq_length)
+    mask = x != pad_token
+    lengths = mask.sum(dim=1)  # (batch_size,)
+    
+    # Create left-padded tensor
+    batch_size, seq_length = x.shape
+    shifted = torch.full_like(x, pad_token)
+
+    for i in range(batch_size):
+        l = lengths[i]
+        shifted[i, -l:] = x[i, mask[i]]
+    
+    return shifted
+
+
  
