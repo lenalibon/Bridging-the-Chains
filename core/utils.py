@@ -7,6 +7,10 @@ from typing import Iterable
 from torch import Tensor
 import torch
 
+from rich.panel import Panel
+from rich.text import Text
+from rich.console import Console
+
 
 def escape_braces(template):
     '''Templates with braces must be escaped for formatting to work: } becomes }} and { becomes {{, except for the placeholder {question} which must be kept as is.'''
@@ -96,4 +100,8 @@ def shift_padding_left(x, pad_token=0):
     return shifted
 
 
- 
+def textify(panel: Panel) -> Text:
+  console = Console(width=120)
+  with console.capture() as capture:
+      console.print(panel)
+  return Text.from_ansi(capture.get())

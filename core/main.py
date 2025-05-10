@@ -3,9 +3,6 @@ import fire
 import logging
 
 from rich.logging import RichHandler
-from rich.panel import Panel
-from rich.text import Text
-from rich.console import Console
 
 from functools import partial
 from pathlib import Path
@@ -14,11 +11,15 @@ from typing import Any, Callable, Iterable, Optional
 import datasets
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, GenerationConfig, Cache
 
+from rich.panel import Panel
+from rich.logging import RichHandler
+
 import gc
 import torch
+import torch.nn.functional as F
 from torch import Tensor
 
-from .utils import SIMPLE_PROMPT_TEMPLATE, get_newline_token_id, write_jsonl, get_timestamp, tensor_split, shift_padding_left
+from .utils import SIMPLE_PROMPT_TEMPLATE, get_newline_token_id, write_jsonl, get_timestamp, tensor_split, textify
 
 
 TokenIdsTensor = torch.Tensor # size: (sequence_length,)
@@ -42,6 +43,10 @@ def clear_cache():
 
 
 clear_cache()
+
+
+def set_seed(seed: int):
+    torch.manual_seed(43)
 
 
 class Chain:
@@ -71,7 +76,10 @@ class Chain:
         max_end_len = len(max(ends, key=len))
         decoded_chain_end = self.tokenizer.decode(self.token_ids[0, -max_end_len:])
         logger.debug(f"Chain#{self.index} @ Step#{self.n_lines} ends with: {repr(decoded_chain_end)}")
-        return any(decoded_chain_end.endswith(end) for end in ends)
+        is_complete = any(decoded_chain_end.endswith(end) for end in ends)
+        if is_complete:
+            logger.debug(f"{self.short_repr} is complete!")
+        return is_complete
 
     def get_lines_as_token_ids(self):
         tensors = tensor_split(self.token_ids, get_newline_token_id(self.tokenizer))
@@ -79,12 +87,40 @@ class Chain:
 
     def get_clean_text(self) -> str:
         decoded = self.tokenizer.decode(self.token_ids[0, self.prompt_offset:], skip_special_tokens=True)
-        # FIXME?
-        return decoded.replace(' "', '').replace('",', '').replace('  ', ' ').replace('\n', ' ')
+        # FIXME? HACK: use regex
+        return decoded.replace(' "', '').replace('",', '').replace('  ', ' ').replace('\n', ' ').replace('  ]', '').strip()
 
-    def as_chains(self) -> 'Chains':
-        raise NotImplementedError("TODO")
-       
+    def as_chains(self) -> 'ListChains':
+        return ListChains([self])
+
+    def get_log_prob(self) -> float:
+        assert self.scores, f"Scores are not available for this chain: {self.scores=}"
+        scores_tuple = self.scores
+        total_log_prob = 0.0
+        target_token_ids = self.token_ids[0, self.prompt_offset:] # shape (sequence_length,)
+        vocab_size = len(self.tokenizer)
+
+        if len(scores_tuple) != len(target_token_ids):
+            raise ValueError("Length of scores_tuple must match length of target_token_ids.")
+
+        for i in range(len(scores_tuple)):
+            step_logits = scores_tuple[i][0] # shape (vocab_size,)
+
+            # Calculate log probabilities for all tokens in vocab for this step
+            log_probs_at_step = F.log_softmax(step_logits, dim=-1)
+            # assert log_probs_at_step.shape == (vocab_size,), f"Expected shape {(vocab_size,)}, got {log_probs_at_step.shape}"
+
+            actual_token_id = target_token_ids[i]
+            total_log_prob += log_probs_at_step[actual_token_id].item()
+
+        logger.debug(f"{self.short_repr} has total log prob: {total_log_prob}")
+
+        return total_log_prob
+
+    @property
+    def short_repr(self) -> str:
+        return f"Chain#{self.index} @ Step#{self.n_lines}"
+        
 
 class Chains:
     """Abstract class for chains of the same prompt"""
@@ -123,6 +159,7 @@ class ListChains(Chains):
         return iter(self.list)
 
  
+# DEPRECATED
 class BatchedTensorChains(Chains):
     """
     Representation of a batch of reasoning chains for a single prompt.
@@ -167,20 +204,27 @@ class Method:
                  model: AutoModelForCausalLM,
                  tokenizer: AutoTokenizer,
                  prompter: 'Prompter',
-                 clusterer: 'Clusterer',
-                 merger: 'Merger',
+                 clusterer: Optional['Clusterer'] = None,
+                 merger: Optional['Merger'] = None,
+                 post_merger: Optional['Merger'] = None,
                  n_init_chains: int = 1,
-                 merge_every=False,
-                 merge_after=False,
-                 label=None):
+                 merge_every: int | bool = False,
+                 merge_after: bool = False,
+                 label = None):
         self.model = model
         self.tokenizer = tokenizer
         self.prompter = prompter
         self.clusterer = clusterer
+        # The first merger `merger` is applied during generation, if `merge_every` is set to a positive integer.
         self.merger = merger
+        # The second merger, `post_merger`, is applied to the chains after generation is complete, if `merge_after==True`.
+        # Why not one merger? for flexibility
+        self.post_merger = post_merger
+        # The number of initial chains to generate, at first step.
         self.n_init_chains = n_init_chains
         self.merge_every = merge_every
         self.merge_after = merge_after
+        # The label is used in the filename with the method results
         self.label = label or self.__class__.__name__
 
         # WARNING: possibly not all tokenizers tokenize newlines the "right way": tokens for `\n`, `\n\n`, `\n\n\n`, etc.
@@ -202,21 +246,30 @@ class Method:
         )
         # NOTE: On the difference between `scores` and `logits`, see https://huggingface.co/docs/transformers/v4.51.3/en/internal/generation_utils#transformers.generation.GenerateDecoderOnlyOutput
 
-    def generate_answer(self, question: str) -> ListChains:
-        # NOTE: assuming generate_answer returns possibly multiple chains
+    def generate_answer(self, question: str) -> Chains:
+        """
+        Given the question generate one or possibly multiple complete chains.
+        """
+        set_seed(42)
+        assert self.prompter
         prompt: str = self.prompter(question)
         debug_panel("Prompt", prompt)
         chains: ListChains = self.first_step_in_all(prompt)
         counter = 1
         while not chains.all_complete():
             if self.merge_every and counter % self.merge_every == 0:
+                assert self.clusterer
+                assert self.merger
                 chain_id_clusters = self.clusterer(chains)
-                chains = self.merger(chains, chain_id_clusters)
+                chains = self.merger(chains, chain_id_clusters) # type: ignore
             chains = self.next_step_in_all(chains)
             counter += 1
         
         if self.merge_after:
-            raise NotImplementedError("TODO")
+            assert self.post_merger
+            assert self.clusterer
+            chain_id_clusters = self.clusterer(chains)
+            chains = self.post_merger(chains, chain_id_clusters) # type: ignore
 
         return chains
 
@@ -278,42 +331,54 @@ class Method:
             to_decode = chain.token_ids[0]
         text = self.tokenizer.decode(to_decode)
         debug_panel(f"Chain#{chain.index} @ Step#{chain.n_lines}", text)
-    
+
 
 class MergeFunction:
     """Return a single chain from a list of chains"""
     def __call__(self, chain_list: list[Chain]) -> Chain:
-        raise NotImplementedError("MergeFunction __call__ should be implemented in subclasses")
+        raise NotImplementedError("Must should be implemented in subclasses")
 
 
 class SummarizingMergeFunction(MergeFunction):
     def __call__(self, chain_list: list[Chain]) -> Chain:
         raise NotImplementedError("TODO")
+
+
+class TrivialMergeFunction(MergeFunction):
+    def __call__(self, chain_list: list[Chain]) -> Chain:
+        """Returns the first (and only) chain in the list, which is expected to be a singleton"""
+        assert len(chain_list) == 1
+        return chain_list[0]
         
 
 class Merger:
     """
     Merger receives the chains, (incl. their scores), a nested list of chain indices (clusters), and returns a set of chains (may be a singleton)
     """
-    def __init__(self, merge_fn: MergeFunction):
+    def __init__(self, merge_fn: Optional[MergeFunction]):
         """merge_fn is a function that takes a list of chains and returns a single chain (may be concatenation or summarization-based)"""
         self.merge_fn = merge_fn
 
     def __call__(self, chains: Chains, chain_id_clusters: list[IdCluster]) -> Chains:
-        raise NotImplementedError("Merger __call__ should be implemented in subclasses")
+        raise NotImplementedError("Must be implemented in subclasses")
 
 
 class MergerMaxProb(Merger):
+    """
+    Select one representative chain per cluster –- based on highest probability P(a_i | question, prompt),
+    *and* then merges them into a single chain by applying the merge_fn"""
     def __call__(self, chains: Chains, chain_id_clusters: list[IdCluster]) -> Chains:
+        assert self.merge_fn
         return self.merge_fn([ self.get_max_prob_chain(chains, id_cluster) for id_cluster in chain_id_clusters ]).as_chains()
 
     def get_max_prob_chain(self, chains: Chains, id_cluster: IdCluster) -> Chain:
-        raise NotImplementedError("TODO")
+        return max((chains[i] for i in id_cluster), key=lambda chain: chain.get_log_prob())
 
 
 class MergerClusterCentroid(Merger):
     def __call__(self, chains: Chains, chain_id_clusters: list[IdCluster]) -> Chains:
         # TODO persist and pass cluster centroids from similarity clusterer?
+        assert self.merge_fn
         return self.merge_fn([ self.get_closest_to_cluster_centroids(chains, cluster) for cluster in chain_id_clusters ]).as_chains()
 
     def get_closest_to_cluster_centroids(self, chains: Chains, id_cluster: IdCluster) -> Chain:
@@ -322,6 +387,7 @@ class MergerClusterCentroid(Merger):
 
 class MergerWithinCluster(Merger):
     def __call__(self, chains, chain_id_clusters) -> Chains:
+        assert self.merge_fn
         return Chains.from_list([ self.merge_fn(self.get_chain_cluster(chains, id_cluster)) for id_cluster in chain_id_clusters ])
 
     def get_chain_cluster(self, chains, id_cluster) -> list[Chain]:
@@ -331,33 +397,56 @@ class MergerWithinCluster(Merger):
 class BaselineGreedy(Method):
     """Select the answer from the single chain with the highest probability without merging or clustering"""
     def __init__(self, model, tokenizer, prompter, **kwargs):
-        raise NotImplementedError("TODO")
-        super().__init__(model, tokenizer, prompter, None, None, **kwargs)
-        self.clusterer = None
-        self.merger = None
+        # In the greedy baseline,
+        # 1. "merging" happens after generation,
+        # 2. and "merging" is really just selecting the highest-probability chain.
+        super().__init__(model, tokenizer, prompter,
+                         clusterer=TrivialClusterer(),
+                         merge_after=True,
+                         post_merger=MergerMaxProb(TrivialMergeFunction()),
+                         **kwargs)
 
 
 class BaselineSimple(Method):
     "No branching, no clustering, no merging"
     def __init__(self, model, tokenizer, prompter, **kwargs):
-        super().__init__(model, tokenizer, prompter, None, None, **kwargs)
-        self.clusterer = None
-        self.merger = None
+        super().__init__(model, tokenizer, prompter, **kwargs)
 
 
-class SimplePrompter:
+class Clusterer:
+    def __call__(self, chains: Chains) -> list[IdCluster]:
+        raise NotImplementedError("Must be implemented in subclasses")
+
+
+class TrivialClusterer(Clusterer):
+    def __call__(self, chains: Chains) -> list[IdCluster]:
+        """Returns a single cluster with all chains"""
+        return [list(range(len(chains)))]
+
+
+# TODO adapt for needs of AutoCoT: e.g. does AutoCoT expect question index?
+class Prompter:
+    def __call__(self, *args, **kwargs) -> str:
+        raise NotImplementedError("Must be implemented in subclasses")
+
+
+class SimplePrompter(Prompter):
     def __call__(self, question):
         return SIMPLE_PROMPT_TEMPLATE.format(question=question)
 
 
 class Experiment:
     def eval(self, **kwargs):
-        torch.manual_seed(42)
         logger.info("Running full evaluation...")
+        # NOTE: A DataGetter is a function that returns a tuple with dataset and its label.
+        # We might want to consider a wrapper class around datasets.Dataset instead.
         data_getters: list[DataGetter] = [partial(self.get_gsm8k, n=1)] # FIXME delete n=
         model, tokenizer = self.get_model_and_tokenizer()
         prompter = SimplePrompter() # FIXME: TODO use autocot
-        methods = [BaselineSimple(model, tokenizer, prompter, n_init_chains=2, label="BaselineSimple-1b-it-8bit_no-autocot")]
+        methods = [
+            BaselineGreedy(model, tokenizer, prompter, n_init_chains=8, label=f"BaselineGreedy"),
+            # BaselineSimple(model, tokenizer, prompter, n_init_chains=4, label=f"BaselineSimple"),
+        ]
         for get_data in data_getters:
             eval_data, dataset_label = get_data()
             for method in methods:
@@ -387,9 +476,11 @@ class Experiment:
     def get_gsm8k(self, n=None) -> tuple['Dataset', str]:
         # NOTE: using the train split for evaluation
         split = datasets.load_dataset("gsm8k", "main")["test"]
+        label = "gsm8k"
         if n is not None:
             split = split.select(range(n))
-        return (split, "gsm8k")
+            label = f"gsm8k-first{n}"
+        return (split, label)
 
     def get_model_and_tokenizer(self):
         # TODO adapt code for Gemma (fix caching crashes)
@@ -403,30 +494,24 @@ class Experiment:
         return model, tokenizer
     
 
-logging.basicConfig(level=logging.WARNING)
-# logging.basicConfig(
-#     level=logging.WARNING,
-#     format="%(message)s",
-#     handlers=[RichHandler()]
-# )
-# logger = logging.getLogger("rich")
-logger = logging.getLogger(__name__)
+# logging.basicConfig(level=logging.WARNING)
+# logger = logging.getLogger(__name__)
+
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(message)s",
+    handlers=[RichHandler()]
+)
+logger = logging.getLogger("rich")
+
 logger.setLevel(logging.DEBUG)
 logger.debug("logger initialized!")
-
-
-def textify(panel: Panel) -> Text:
-  console = Console(width=120)
-  with console.capture() as capture:
-      console.print(panel)
-  return Text.from_ansi(capture.get())
-
 
 def debug_panel(title, text):
     panel = Panel(text, title=title)
     logger.debug(f"\n{textify(panel)}")
 
-           
+
 # Usage: python -m core.main
 if __name__ == "__main__":
     fire.Fire(Experiment().eval)
