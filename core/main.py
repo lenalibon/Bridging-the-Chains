@@ -1,6 +1,7 @@
 
 import fire
 import logging
+import re
 
 from rich.logging import RichHandler
 
@@ -73,24 +74,50 @@ class Chain:
         # number of lines generated so far
         self.n_lines = n_lines
 
-    def is_complete(self, ends = ['\n  ]\n', '\n  ]\n}', '\n\n', '<|endoftext|>']) -> bool:
+    def is_complete_v0(self, ends = ['\n  ]\n', '\n  ]\n}', '\n\n', '<|endoftext|>']) -> bool:
         """Check if the chain is complete, if it ends with one of the given strings"""
         max_end_len = len(max(ends, key=len))
         decoded_chain_end = self.tokenizer.decode(self.token_ids[0, -max_end_len:])
-        logger.debug(f"Chain#{self.index} @ Step#{self.n_lines} ends with: {repr(decoded_chain_end)}")
+        logger.debug(f"{self.short_repr} ends with: {repr(decoded_chain_end)}")
         is_complete = any(decoded_chain_end.endswith(end) for end in ends)
         if is_complete:
             logger.debug(f"{self.short_repr} is complete!")
         return is_complete
 
-    def get_lines_as_token_ids(self):
+    def is_complete(self) -> bool:
+        '''
+        Return False if the last generated line is a valid JSONic step of the form `"...",` (meaning the chain is still in generation),
+        and True otherwise (meaning the chain is complete).
+        '''
+        # NOTE: this may be more expensive than v0, but more robust to hallucinations in which the model breaks the JSON format
+        lines = self.get_decoded_new().split('\n')
+        # We know that the last line of split must be empty, because we are using a stop string \n
+        assert lines[-1] == '' # TODO handle failure gracefully
+        # logger.debug(f"{lines=}")
+        last_line = lines[-2]
+        logger.debug(f"{self.short_repr} ends with line: {repr(last_line)}")
+        pattern = r"^\s*\".*\",\s*$"
+        is_complete = re.fullmatch(pattern, last_line) is None
+        logger.debug(f"{self.short_repr} complete? {is_complete}")
+        return is_complete
+
+    def get_lines_as_ids(self):
+        # NOTE: brittle, tokenization issues
         tensors = tensor_split(self.token_ids, get_newline_token_id(self.tokenizer))
         return tensors
 
+    def get_decoded_full(self, skip_special_tokens=True) -> str:
+        return self.tokenizer.decode(self.token_ids[0],
+                                     skip_special_tokens=skip_special_tokens)
+
+    def get_decoded_new(self, skip_special_tokens=True) -> str:
+        return self.tokenizer.decode(self.token_ids[0, self.prompt_offset:],
+                                     skip_special_tokens=skip_special_tokens)
+
     def get_clean_text(self) -> str:
-        decoded = self.tokenizer.decode(self.token_ids[0, self.prompt_offset:], skip_special_tokens=True)
         # FIXME? HACK: use regex
-        return decoded.replace(' "', '').replace('",', '').replace('  ', ' ').replace('\n', ' ').replace('  ]', '').strip()
+        decoded = self.get_decoded_new()
+        return decoded.replace(' "', '').replace('",', '').replace('  ', ' ').replace('  ', ' ').replace('\n', ' ').replace('  ]', '').strip()
 
     def as_chains(self) -> 'ListChains':
         return ListChains([self])
@@ -121,7 +148,7 @@ class Chain:
 
     @property
     def short_repr(self) -> str:
-        return f"Chain#{self.index} @ Step#{self.n_lines}"
+        return f"[Chain#{self.index} @ {self.n_lines} lines]"
         
 
 class Chains:
@@ -453,7 +480,7 @@ class Experiment:
         model, tokenizer = self.get_model_and_tokenizer()
         prompter = SimplePrompter() # FIXME: TODO use autocot
         methods = [
-            BaselineGreedy(model, tokenizer, prompter, n_init_chains=1, label=f"BaselineGreedy-1"),
+            BaselineGreedy(model, tokenizer, prompter, n_init_chains=8, label=f"BaselineGreedy-8"),
             # BaselineSimple(model, tokenizer, prompter, n_init_chains=4, label=f"BaselineSimple"),
         ]
         for get_data in data_getters:
@@ -471,7 +498,7 @@ class Experiment:
             # NOTE: roscoe's gsm8k.json is different
             # FIXME: only the first chain is written! I am not sure what we should do if there are more chains. -sb
             clean_text = pred_chains[0].get_clean_text()
-            debug_panel("Predicted Answer", clean_text)
+            debug_panel("Predicted Answer", pred_chains[0].get_decoded_new())
             debug_panel("True Answer", true_answer)
             results.append({
                 "premise": question,
@@ -493,8 +520,8 @@ class Experiment:
 
     def get_model_and_tokenizer(self):
         # TODO adapt code for Gemma (fix caching crashes)
-        # model_name = "google/gemma-3-1b-it"
-        model_name = "Qwen/Qwen2.5-0.5B-Instruct"
+        model_name = "google/gemma-3-1b-it"
+        # model_name = "Qwen/Qwen2.5-0.5B-Instruct"
         tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
         # logger.debug("padding_side=left")
         # TODO use_fast=True

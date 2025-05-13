@@ -85,9 +85,13 @@ def print_decode_batch(tokenizer, batch_output_ids):
  
 
 def tensor_split(x: Tensor, delimiter: int) -> Iterable[Tensor]:
+    # NOT TESTED
     delimiter_indices = torch.where(x == delimiter)[0]
-    starts = torch.cat([torch.tensor([-1]), delimiter_indices])
-    ends = torch.cat([delimiter_indices, torch.tensor([len(x)])])
+    # TODO optimize with itertools.chain.from_iterable
+    # starts = torch.cat([torch.tensor([-1]), delimiter_indices])
+    starts = itertools.chain.from_iterable(([-1], delimiter_indices))
+    # ends = torch.cat([delimiter_indices, torch.tensor([len(x)])])
+    ends = itertools.chain.from_iterable((delimiter_indices, [len(x)]))
     sub_tensors = [x[s+1:e] for s, e in zip(starts, ends) if e - s > 1]
     return sub_tensors
 
