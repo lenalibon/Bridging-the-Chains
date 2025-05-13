@@ -36,6 +36,14 @@ _SIMPLE_PROMPT_TEMPLATE = '''You are a math tutor. You will be given a math ques
 '''
 
 SIMPLE_PROMPT_TEMPLATE = escape_braces(_SIMPLE_PROMPT_TEMPLATE)
+
+DEBUG_PROMPT = '''The Countess of Sakharovka.
+By F. M. Dostoevsky
+1868
+
+The cherry garden was cloaked in a silence so profound that even the wind seemed ashamed to stir the blossoming branches. Pale petals fell one by one, like the slow unraveling of memory.
+
+At the edge of the grove, near the marble fountain where no water had flowed since the old Count’s death, the Countess stood motionless, her veil trailing behind her in the grass.'''
     
 
 @cache

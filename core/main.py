@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
 import datasets
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, GenerationConfig, Cache
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, GenerationConfig, Cache, HybridCache
 
 from rich.panel import Panel
 from rich.logging import RichHandler
@@ -19,7 +19,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
-from .utils import SIMPLE_PROMPT_TEMPLATE, get_newline_token_id, write_jsonl, get_timestamp, tensor_split, textify
+from .utils import *
 
 
 TokenIdsTensor = torch.Tensor # size: (sequence_length,)
@@ -32,8 +32,10 @@ DataGetter = Callable[[], tuple['Dataset', str]] # function that returns a datas
 
 
 DEVICE = "cuda"
-MAX_NEW_TOKENS = 256
-TEMPERATURE = .7 # FIXME
+TEMPERATURE = 0.7
+
+MAX_STEPS = 8
+MAX_TOKENS_PER_STEP = 100
 
 
 def clear_cache():
@@ -46,7 +48,7 @@ clear_cache()
 
 
 def set_seed(seed: int):
-    torch.manual_seed(43)
+    torch.manual_seed(42)
 
 
 class Chain:
@@ -235,10 +237,10 @@ class Method:
 
         stop_string = "\n"
         self.gen_config = GenerationConfig(
-            max_new_tokens=MAX_NEW_TOKENS,
+            max_new_tokens=MAX_TOKENS_PER_STEP,
             do_sample=True,
             temperature=TEMPERATURE,
-            # cache_implementation=None,
+            cache_implementation=None,
             return_dict_in_generate=True,
             output_scores=True,
             # eos_token_id=self.stop_token_ids,
@@ -279,10 +281,13 @@ class Method:
     def first_step_in_one(self, prompt: str, index: int = None) -> Chain:
         input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(DEVICE)
         prompt_offset = input_ids.shape[1]
+        pkv = prepare_pkv(self.model, prompt_offset)
         out = self.model.generate(input_ids,
-                                  past_key_values=None,
+                                  past_key_values=pkv,
                                   generation_config=self.gen_config,
-                                  tokenizer=self.tokenizer)
+                                  tokenizer=self.tokenizer,
+                                  cache_implementation=None
+                                  )
         chain = Chain(self.tokenizer,
                       out.sequences,
                       prompt_offset=prompt_offset,
@@ -310,11 +315,12 @@ class Method:
         # input_token_ids = shift_padding_left(chains.token_ids, pad_token=self.tokenizer.pad_token_id)
         input_token_ids = chain.token_ids
         out = self.model.generate(input_token_ids,
-                                #   cache_implementation=None,
                                 #   attention_mask=(input_token_ids != self.tokenizer.pad_token_id),
                                   past_key_values=chain.pkv,
                                   generation_config=self.gen_config,
-                                  tokenizer=self.tokenizer)
+                                  tokenizer=self.tokenizer,
+                                  cache_implementation=None,
+                                  )
         chain.pkv = out.past_key_values
         chain.token_ids = out.sequences
         # Append the new scores (tuple of tensors) to the existing scores
@@ -431,8 +437,11 @@ class Prompter:
 
 
 class SimplePrompter(Prompter):
+    def __init__(self, template: str = SIMPLE_PROMPT_TEMPLATE):
+        self.template = template
+
     def __call__(self, question):
-        return SIMPLE_PROMPT_TEMPLATE.format(question=question)
+        return self.template.format(question=question)
 
 
 class Experiment:
@@ -444,7 +453,7 @@ class Experiment:
         model, tokenizer = self.get_model_and_tokenizer()
         prompter = SimplePrompter() # FIXME: TODO use autocot
         methods = [
-            BaselineGreedy(model, tokenizer, prompter, n_init_chains=8, label=f"BaselineGreedy"),
+            BaselineGreedy(model, tokenizer, prompter, n_init_chains=1, label=f"BaselineGreedy-1"),
             # BaselineSimple(model, tokenizer, prompter, n_init_chains=4, label=f"BaselineSimple"),
         ]
         for get_data in data_getters:
@@ -492,6 +501,21 @@ class Experiment:
         # model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=BitsAndBytesConfig(load_in_8bit=True))
         model = AutoModelForCausalLM.from_pretrained(model_name).to(DEVICE)
         return model, tokenizer
+
+
+def prepare_pkv(model, n_input_tokens):
+    model_name = model.__class__.__name__
+    if 'Gemma' in model_name:
+        max_cache_len = n_input_tokens + MAX_STEPS * MAX_TOKENS_PER_STEP
+        logger.debug(f"Preparing HybridCache for {model_name} with max_cache_len={max_cache_len}")
+        return HybridCache(config=model.config,
+                           max_batch_size=1,
+                           max_cache_len=max_cache_len,
+                           device=model.device,
+                           dtype=model.dtype)
+    else:
+        return None
+
     
 
 # logging.basicConfig(level=logging.WARNING)
