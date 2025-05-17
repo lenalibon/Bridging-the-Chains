@@ -1,4 +1,3 @@
-
 import fire
 import logging
 import re
@@ -6,6 +5,7 @@ import re
 from rich.logging import RichHandler
 
 from functools import partial
+from string import Template
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
@@ -21,6 +21,7 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from .utils import *
+from .prompts import *
 
 
 TokenIdsTensor = torch.Tensor # size: (sequence_length,)
@@ -64,7 +65,9 @@ class Chain:
                  scores: Optional[Scores] = tuple(),
                  pkv: Optional[Cache] = None,
                  index: Optional[int] = None,
-                 n_lines: Optional[int] = None):
+                 n_lines: Optional[int] = None,
+                 question: Optional[str] = None,
+                ):
         self.tokenizer = tokenizer
         self.token_ids = token_ids
         self.prompt_offset = prompt_offset
@@ -73,6 +76,7 @@ class Chain:
         self.index = index
         # number of lines generated so far
         self.n_lines = n_lines
+        self.question = question
 
     def is_complete_v0(self, ends = ['\n  ]\n', '\n  ]\n}', '\n\n', '<|endoftext|>']) -> bool:
         """Check if the chain is complete, if it ends with one of the given strings"""
@@ -84,40 +88,58 @@ class Chain:
             logger.debug(f"{self.short_repr} is complete!")
         return is_complete
 
+    @cache
     def is_complete(self) -> bool:
         '''
         Return False if the last generated line is a valid JSONic step of the form `"...",` (meaning the chain is still in generation),
         and True otherwise (meaning the chain is complete).
         '''
         # NOTE: this may be more expensive than v0, but more robust to hallucinations in which the model breaks the JSON format
-        lines = self.get_decoded_new().split('\n')
+        lines = self.get_generated_text().split('\n')
         # We know that the last line of split must be empty, because we are using a stop string \n
         assert lines[-1] == '' # TODO handle failure gracefully
         # logger.debug(f"{lines=}")
         last_line = lines[-2]
         logger.debug(f"{self.short_repr} ends with line: {repr(last_line)}")
-        pattern = r"^\s*\".*\",\s*$"
+        pattern = r"^\s*\".*\",?\s*$"
         is_complete = re.fullmatch(pattern, last_line) is None
         logger.debug(f"{self.short_repr} complete? {is_complete}")
         return is_complete
 
-    def get_lines_as_ids(self):
-        # NOTE: brittle, tokenization issues
-        tensors = tensor_split(self.token_ids, get_newline_token_id(self.tokenizer))
-        return tensors
-
-    def get_decoded_full(self, skip_special_tokens=True) -> str:
+    def get_full_text(self, skip_special_tokens=True) -> str:
         return self.tokenizer.decode(self.token_ids[0],
                                      skip_special_tokens=skip_special_tokens)
 
-    def get_decoded_new(self, skip_special_tokens=True) -> str:
+    def get_generated_text(self, skip_special_tokens=True) -> str:
         return self.tokenizer.decode(self.token_ids[0, self.prompt_offset:],
                                      skip_special_tokens=skip_special_tokens)
 
     def get_clean_text(self) -> str:
-        # FIXME? HACK: use regex
-        decoded = self.get_decoded_new()
-        return decoded.replace(' "', '').replace('",', '').replace('  ', ' ').replace('  ', ' ').replace('\n', ' ').replace('  ]', '').strip()
+        return '\n'.join(self.get_generated_steps())
+
+    def get_generated_lines(self) -> list[str]:
+        return self.get_generated_text().split('\n')
+
+    @property
+    def jsonic_repr(self) -> str:
+        steps = self.get_generated_steps()
+        quoted_steps = [f'"{step}"' for step in steps]
+        if not self.is_complete():
+            quoted_steps.append('...')
+        return CHAIN_JSON_TEMPLATE.substitute(
+            question=self.question,
+            cot_steps=(',\n' + ' '*4).join(quoted_steps)
+        )
+
+    def get_generated_steps(self) -> list[str]:
+        steps = [self.line_to_step(line) for line in self.get_generated_lines()]
+        steps = [step for step in steps if step is not None]
+        return steps
+
+    def line_to_step(self, line: str) -> Optional[str]:
+        pattern = r'^\s*"(.*)",?\s*$'
+        match = re.match(pattern, line)
+        return match.group(1) if match else None
 
     def as_chains(self) -> 'ListChains':
         return ListChains([self])
@@ -149,6 +171,9 @@ class Chain:
     @property
     def short_repr(self) -> str:
         return f"[Chain#{self.index} @ {self.n_lines} lines]"
+
+    def __hash__(self):
+        return hash_tensor(self.token_ids)
         
 
 class Chains:
@@ -283,7 +308,7 @@ class Method:
         assert self.prompter
         prompt: str = self.prompter(question)
         debug_panel("Prompt", prompt)
-        chains: ListChains = self.first_step_in_all(prompt)
+        chains: ListChains = self.first_step_in_all(prompt, question=question)
         counter = 1
         while not chains.all_complete():
             if self.merge_every and counter % self.merge_every == 0:
@@ -302,10 +327,10 @@ class Method:
 
         return chains
 
-    def first_step_in_all(self, prompt: str) -> ListChains:
-        return ListChains.from_list([self.first_step_in_one(prompt, index=index) for index in range(self.n_init_chains)])
+    def first_step_in_all(self, prompt: str, **kw) -> ListChains:
+        return ListChains.from_list([self.first_step_in_one(prompt, index=index, **kw) for index in range(self.n_init_chains)])
 
-    def first_step_in_one(self, prompt: str, index: int = None) -> Chain:
+    def first_step_in_one(self, prompt: str, index: Optional[int] = None, question: Optional[str] = None) -> Chain:
         input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(DEVICE)
         prompt_offset = input_ids.shape[1]
         pkv = prepare_pkv(self.model, prompt_offset)
@@ -321,7 +346,8 @@ class Method:
                       scores=out.scores,
                       pkv=out.past_key_values,
                       index=index,
-                      n_lines=1)
+                      n_lines=1,
+                      question=question)
         self.print_tokens(chain, skip_offset=True)
         return chain
 
@@ -330,7 +356,7 @@ class Method:
 
     def maybe_next_step_in_one(self, chain: Chain) -> Chain:
         if chain.is_complete():
-            logger.debug(f"Chain#{chain.index} @ Step#{chain.n_lines} is complete, skipping...")
+            logger.debug(f"{chain.short_repr} is complete, skipping...")
             return chain
         else:
             return self.next_step_in_one(chain)
@@ -357,13 +383,14 @@ class Method:
         self.print_tokens(chain, skip_offset=True)
         return chain
 
-    def print_tokens(self, chain: Chain, skip_offset=False) -> None:
-        if skip_offset:
-            to_decode = chain.token_ids[:, chain.prompt_offset:][0]
+    def print_tokens(self, chain: Chain, jsonic=True, skip_offset=False) -> None:
+        if jsonic:
+            text = chain.jsonic_repr
         else:
-            to_decode = chain.token_ids[0]
-        text = self.tokenizer.decode(to_decode)
-        debug_panel(f"Chain#{chain.index} @ Step#{chain.n_lines}", text)
+            offset = chain.prompt_offset if skip_offset else 0
+            to_decode = chain.token_ids[0, offset:]
+            text = self.tokenizer.decode(to_decode)
+        debug_panel(f"{chain.short_repr}", text)
 
 
 class MergeFunction:
@@ -373,8 +400,22 @@ class MergeFunction:
 
 
 class SummarizingMergeFunction(MergeFunction):
+    def __init__(self, model: AutoModelForCausalLM, tokenizer: AutoTokenizer):
+        self.model = model
+        self.tokenizer = tokenizer
+
     def __call__(self, chain_list: list[Chain]) -> Chain:
+        """Returns a single chain being the result of an LLM call to summarize the chains"""
+        prompt = self.prepare_summarizing_prompt(chain_list)
+        debug_panel("Summarizing prompt", prompt)
         raise NotImplementedError("TODO")
+        
+    def prepare_summarizing_prompt(self, chain_list: list[Chain]) -> str:
+        question = chain_list[0].question
+        cot_steps_json = ''.join([chain.jsonic_repr for chain in chain_list])
+        prompt = SUMMARIZING_PROMPT_TEMPLATE.substitute(question=question, cot_steps=cot_steps_json)
+        return prompt
+
 
 
 class TrivialMergeFunction(MergeFunction):
@@ -464,11 +505,11 @@ class Prompter:
 
 
 class SimplePrompter(Prompter):
-    def __init__(self, template: str = SIMPLE_PROMPT_TEMPLATE):
+    def __init__(self, template: Template = SIMPLE_PROMPT_TEMPLATE):
         self.template = template
 
     def __call__(self, question):
-        return self.template.format(question=question)
+        return self.template.substitute(question=question)
 
 
 class Experiment:
@@ -498,7 +539,7 @@ class Experiment:
             # NOTE: roscoe's gsm8k.json is different
             # FIXME: only the first chain is written! I am not sure what we should do if there are more chains. -sb
             clean_text = pred_chains[0].get_clean_text()
-            debug_panel("Predicted Answer", pred_chains[0].get_decoded_new())
+            debug_panel("Predicted Answer", pred_chains[0].get_generated_text())
             debug_panel("True Answer", true_answer)
             results.append({
                 "premise": question,
