@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
 import datasets
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, GenerationConfig, Cache, HybridCache
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, GenerationConfig, Cache, HybridCache # type: ignore
+from datasets import Dataset
 
 from rich.panel import Panel
 from rich.logging import RichHandler
@@ -39,6 +40,7 @@ TEMPERATURE = 0.7
 MAX_STEPS = 8
 MAX_TOKENS_PER_STEP = 100
 
+PREFER_JSONIC_DEBUG = True
 
 def clear_cache():
     gc.collect()
@@ -81,7 +83,7 @@ class Chain:
     def is_complete_v0(self, ends = ['\n  ]\n', '\n  ]\n}', '\n\n', '<|endoftext|>']) -> bool:
         """Check if the chain is complete, if it ends with one of the given strings"""
         max_end_len = len(max(ends, key=len))
-        decoded_chain_end = self.tokenizer.decode(self.token_ids[0, -max_end_len:])
+        decoded_chain_end = self.tokenizer.decode(self.token_ids[0, -max_end_len:]) # type: ignore
         logger.debug(f"{self.short_repr} ends with: {repr(decoded_chain_end)}")
         is_complete = any(decoded_chain_end.endswith(end) for end in ends)
         if is_complete:
@@ -101,17 +103,17 @@ class Chain:
         # logger.debug(f"{lines=}")
         last_line = lines[-2]
         logger.debug(f"{self.short_repr} ends with line: {repr(last_line)}")
-        pattern = r"^\s*\".*\",?\s*$"
+        pattern = r"^\s*\".*\",?\s*$" # Quoted line, with an optional comma at the end
         is_complete = re.fullmatch(pattern, last_line) is None
         logger.debug(f"{self.short_repr} complete? {is_complete}")
         return is_complete
 
     def get_full_text(self, skip_special_tokens=True) -> str:
-        return self.tokenizer.decode(self.token_ids[0],
+        return self.tokenizer.decode(self.token_ids[0], # type: ignore
                                      skip_special_tokens=skip_special_tokens)
 
     def get_generated_text(self, skip_special_tokens=True) -> str:
-        return self.tokenizer.decode(self.token_ids[0, self.prompt_offset:],
+        return self.tokenizer.decode(self.token_ids[0, self.prompt_offset:], # type: ignore
                                      skip_special_tokens=skip_special_tokens)
 
     def get_clean_text(self) -> str:
@@ -149,10 +151,12 @@ class Chain:
         scores_tuple = self.scores
         total_log_prob = 0.0
         target_token_ids = self.token_ids[0, self.prompt_offset:] # shape (sequence_length,)
-        vocab_size = len(self.tokenizer)
+        vocab_size = len(self.tokenizer) # type: ignore
 
         if len(scores_tuple) != len(target_token_ids):
             raise ValueError("Length of scores_tuple must match length of target_token_ids.")
+
+        # TODO! assert on sequence length. beware bos
 
         for i in range(len(scores_tuple)):
             step_logits = scores_tuple[i][0] # shape (vocab_size,)
@@ -213,38 +217,9 @@ class ListChains(Chains):
         return iter(self.list)
 
  
-# DEPRECATED
-class BatchedTensorChains(Chains):
-    """
-    Representation of a batch of reasoning chains for a single prompt.
-    Internally represented as a tensor of token ids, of shape (batch_size, sequence_length),
-    where `batch_size` is the number of chains and `sequence_length` is the length of each chain (in tokens, including the prompt)
-
-    Probability scores and past-key-values (KV-cache) are stored as well.
-
-    NOTE: does not work! padding is the problem. we can revive this class if really needed.
-    """
-    def __init__(self, tokenizer: AutoTokenizer, token_ids: BatchedTokenIdsTensor, prompt_offset: int,
-                 scores: Optional[Scores] = tuple(), pkv: Optional[Cache] = None):
-        self.tokenizer = tokenizer
-        self.token_ids = token_ids
-        self.prompt_offset = prompt_offset
-        # May be more efficient to use a list[Tensor] for scores
-        self.scores = scores
-        self.pkv = pkv
-    
-    def __getitem__(self, chain_id: int) -> Chain:
-        # TODO what about scores?
-        return Chain(self.tokenizer, self.token_ids[chain_id], self.prompt_offset)
-
-    def __len__(self) -> int:
-        return self.token_ids.shape[0]
-
-
-
 # ### Summary of the planned Methods
-# - BaselineGreedy: select the answer from the single chain with the highest probability without merging or clustering.
-# - BaselineAggregate: aggregate all answers into a single output without clustering.
+# - [DONE] BaselineGreedy: select the answer from the single chain with the highest probability without merging or clustering.
+# - [WIP] BaselineAggregate: aggregate all answers into a single output without clustering.
 # - MethodMergingDuringGeneration: 
 #   - MethodMergingRepresentatives:
 #     - MethodMergingRepresentativesMaxProb
@@ -280,6 +255,7 @@ class Method:
         self.merge_after = merge_after
         # The label is used in the filename with the method results
         self.label = label or self.__class__.__name__
+        self.stepper = Stepper(model, tokenizer)
 
         # WARNING: possibly not all tokenizers tokenize newlines the "right way": tokens for `\n`, `\n\n`, `\n\n\n`, etc.
         # self.stop_token_ids = [tokenizer.convert_tokens_to_ids('\n'), tokenizer.eos_token_id]
@@ -287,6 +263,43 @@ class Method:
         # stop_tokens = tokenizer.convert_ids_to_tokens(self.stop_token_ids)
         # logger.debug(f"{stop_tokens=}")
 
+    def generate_answer(self, question: str) -> Chains:
+        """
+        Given the question generate one or possibly multiple complete chains.
+        """
+        set_seed(42)
+        assert self.prompter
+        prompt: str = self.prompter(question)
+        debug_panel("Prompt", prompt)
+        chains: ListChains = self.stepper.first_step_in_all(prompt, question=question, n=self.n_init_chains)
+        counter = 1
+        while not chains.all_complete():
+            if self.merge_every and counter % self.merge_every == 0:
+                assert self.clusterer
+                assert self.merger
+                chain_id_clusters = self.clusterer(chains)
+                chains = self.merger(chains, chain_id_clusters) # type: ignore
+            chains = self.stepper.next_step_in_all(chains)
+            counter += 1
+        
+        if self.merge_after:
+            assert self.post_merger
+            assert self.clusterer
+            chain_id_clusters = self.clusterer(chains)
+            chains = self.post_merger(chains, chain_id_clusters) # type: ignore
+
+        return chains
+
+
+class Stepper:
+    """
+    Functionality for next step generation, in one class
+
+    Used in `Method` and `SummarizingMergeFunction`
+    """
+    def __init__(self, model: AutoModelForCausalLM, tokenizer: AutoTokenizer):
+        self.model = model
+        self.tokenizer = tokenizer
         stop_string = "\n"
         self.gen_config = GenerationConfig(
             max_new_tokens=MAX_TOKENS_PER_STEP,
@@ -298,43 +311,17 @@ class Method:
             # eos_token_id=self.stop_token_ids,
             stop_strings=stop_string,
         )
-        # NOTE: On the difference between `scores` and `logits`, see https://huggingface.co/docs/transformers/v4.51.3/en/internal/generation_utils#transformers.generation.GenerateDecoderOnlyOutput
+        # NOTE: On the difference between `scores` and `logits`,
+        # see https://huggingface.co/docs/transformers/v4.51.3/en/internal/generation_utils#transformers.generation.GenerateDecoderOnlyOutput
 
-    def generate_answer(self, question: str) -> Chains:
-        """
-        Given the question generate one or possibly multiple complete chains.
-        """
-        set_seed(42)
-        assert self.prompter
-        prompt: str = self.prompter(question)
-        debug_panel("Prompt", prompt)
-        chains: ListChains = self.first_step_in_all(prompt, question=question)
-        counter = 1
-        while not chains.all_complete():
-            if self.merge_every and counter % self.merge_every == 0:
-                assert self.clusterer
-                assert self.merger
-                chain_id_clusters = self.clusterer(chains)
-                chains = self.merger(chains, chain_id_clusters) # type: ignore
-            chains = self.next_step_in_all(chains)
-            counter += 1
-        
-        if self.merge_after:
-            assert self.post_merger
-            assert self.clusterer
-            chain_id_clusters = self.clusterer(chains)
-            chains = self.post_merger(chains, chain_id_clusters) # type: ignore
-
-        return chains
-
-    def first_step_in_all(self, prompt: str, **kw) -> ListChains:
-        return ListChains.from_list([self.first_step_in_one(prompt, index=index, **kw) for index in range(self.n_init_chains)])
+    def first_step_in_all(self, prompt: str, n = 1, **kw) -> ListChains:
+        return ListChains.from_list([self.first_step_in_one(prompt, index=index, **kw) for index in range(n)])
 
     def first_step_in_one(self, prompt: str, index: Optional[int] = None, question: Optional[str] = None) -> Chain:
-        input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(DEVICE)
+        input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(DEVICE) # type: ignore
         prompt_offset = input_ids.shape[1]
         pkv = prepare_pkv(self.model, prompt_offset)
-        out = self.model.generate(input_ids,
+        out = self.model.generate(input_ids, # type: ignore
                                   past_key_values=pkv,
                                   generation_config=self.gen_config,
                                   tokenizer=self.tokenizer,
@@ -348,7 +335,7 @@ class Method:
                       index=index,
                       n_lines=1,
                       question=question)
-        self.print_tokens(chain, skip_offset=True)
+        self.debug_chain(chain, skip_offset=True)
         return chain
 
     def next_step_in_all(self, chains: ListChains) -> ListChains: 
@@ -362,13 +349,8 @@ class Method:
             return self.next_step_in_one(chain)
 
     def next_step_in_one(self, chain: Chain) -> Chain:
-        # assert chains.token_ids[0, 0] == self.tokenizer.bos_token_id, f"Expected <bos> token at the beginning, got {chains.token_ids[0, 0]}"
-        # input_token_ids = chains.token_ids[:, 1:] # skip <bos>
-        # logger.debug(f"{self.tokenizer.pad_token_id=}")
-        # input_token_ids = shift_padding_left(chains.token_ids, pad_token=self.tokenizer.pad_token_id)
         input_token_ids = chain.token_ids
-        out = self.model.generate(input_token_ids,
-                                #   attention_mask=(input_token_ids != self.tokenizer.pad_token_id),
+        out = self.model.generate(input_token_ids, # type: ignore
                                   past_key_values=chain.pkv,
                                   generation_config=self.gen_config,
                                   tokenizer=self.tokenizer,
@@ -380,16 +362,16 @@ class Method:
         chain.scores += out.scores
         assert chain.n_lines
         chain.n_lines += 1
-        self.print_tokens(chain, skip_offset=True)
+        self.debug_chain(chain, skip_offset=True)
         return chain
 
-    def print_tokens(self, chain: Chain, jsonic=True, skip_offset=False) -> None:
+    def debug_chain(self, chain: Chain, jsonic=PREFER_JSONIC_DEBUG, skip_offset=False) -> None:
         if jsonic:
             text = chain.jsonic_repr
         else:
             offset = chain.prompt_offset if skip_offset else 0
             to_decode = chain.token_ids[0, offset:]
-            text = self.tokenizer.decode(to_decode)
+            text = self.tokenizer.decode(to_decode) # type: ignore
         debug_panel(f"{chain.short_repr}", text)
 
 
@@ -403,19 +385,25 @@ class SummarizingMergeFunction(MergeFunction):
     def __init__(self, model: AutoModelForCausalLM, tokenizer: AutoTokenizer):
         self.model = model
         self.tokenizer = tokenizer
+        self.stepper = Stepper(model, tokenizer)
 
     def __call__(self, chain_list: list[Chain]) -> Chain:
         """Returns a single chain being the result of an LLM call to summarize the chains"""
+        # TODO test this
+        # TODO take precautions against infinite while-looping
         prompt = self.prepare_summarizing_prompt(chain_list)
         debug_panel("Summarizing prompt", prompt)
-        raise NotImplementedError("TODO")
+        sum_chain = self.stepper.first_step_in_one(prompt)
+        while not sum_chain.is_complete():
+            sum_chain = self.stepper.next_step_in_one(sum_chain)
+        return sum_chain
+        
         
     def prepare_summarizing_prompt(self, chain_list: list[Chain]) -> str:
         question = chain_list[0].question
         cot_steps_json = ''.join([chain.jsonic_repr for chain in chain_list])
         prompt = SUMMARIZING_PROMPT_TEMPLATE.substitute(question=question, cot_steps=cot_steps_json)
         return prompt
-
 
 
 class TrivialMergeFunction(MergeFunction):
@@ -475,9 +463,18 @@ class BaselineGreedy(Method):
         # 1. "merging" happens after generation,
         # 2. and "merging" is really just selecting the highest-probability chain.
         super().__init__(model, tokenizer, prompter,
-                         clusterer=TrivialClusterer(),
                          merge_after=True,
+                         clusterer=TrivialClusterer(),
                          post_merger=MergerMaxProb(TrivialMergeFunction()),
+                         **kwargs)
+
+class BaselineAggregation(Method):
+    """Aggregation Approach: Aggregating all answers into a single output without clustering."""
+    def __init__(self, model, tokenizer, prompter, **kwargs):
+        super().__init__(model, tokenizer, prompter,
+                         merge_after=True,
+                         clusterer=TrivialClusterer(),
+                         post_merger=Merger(SummarizingMergeFunction(model, tokenizer)),
                          **kwargs)
 
 
@@ -552,12 +549,12 @@ class Experiment:
         
     def get_gsm8k(self, n=None) -> tuple['Dataset', str]:
         # NOTE: using the train split for evaluation
-        split = datasets.load_dataset("gsm8k", "main")["test"]
+        split = datasets.load_dataset("gsm8k", "main")["test"] # type: ignore
         label = "gsm8k"
         if n is not None:
-            split = split.select(range(n))
+            split = split.select(range(n)) # type: ignore
             label = f"gsm8k-first{n}"
-        return (split, label)
+        return (split, label) # type: ignore
 
     def get_model_and_tokenizer(self):
         # TODO adapt code for Gemma (fix caching crashes)
