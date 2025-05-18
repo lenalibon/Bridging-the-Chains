@@ -11,11 +11,6 @@ from roscoe.score import SENT_TRANS
 from roscoe.utils import save_scores, print_and_reset_max_gpu_memory
 from dotenv import load_dotenv
 
-# Placeholder imports (you must implement or replace these)
-#from metrics.bert import compute_bert_score  # Assume function exists
-#from metrics.f1 import compute_f1_score       # Assume function exists
-#from metrics.exact_match import compute_em    # Assume function exists
-
 def run_roscoe(input_path, output_path, model_name, model_type, datasets, suffix, scores, discourse_batch, coherence_batch):
     evaluator = ReasoningEvaluator(
         score_types=scores,

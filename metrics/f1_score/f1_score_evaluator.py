@@ -38,16 +38,13 @@ class F1ScoreEvaluator:
 
         for line in tqdm(lines, desc="Evaluating F1", unit="example"):
             item = json.loads(line)
-            problem = item['premise']
-            answer = item['gpt-3']
-            ground_truth = item['hypothesis'].split(
-                "IGNORE THIS. Ground truth here for reference. "
-            )[1]
-
+            problem = item['question']
+            answer = item['answer']
+            ground_truth = item['ground_truth']
             f1_score = self.evaluate_answer(problem, answer, ground_truth)
 
             results.append({
-                "key": item.get("key", ""),
+                "question": item.get("question", ""),
                 "f1": f1_score
             })
 

@@ -80,6 +80,7 @@ class ReasoningEvaluator(Evaluator):
             **kwargs,
         )
 
+    """
     def update_evaluator(self, in_file: str):
         hypothesises = []
         contexts = []
@@ -107,6 +108,24 @@ class ReasoningEvaluator(Evaluator):
                         + jline["explanation_3"]
                     )
                     refs.append(r_chain)
+        super().set_hypos(hypothesises)
+        super().set_context(contexts)
+        super().set_references(refs)
+    """
+    def update_evaluator(self, in_file: str):
+        hypothesises = []
+        contexts = []
+        refs = []
+        with open(in_file) as _f:
+            for line in _f:
+                jline = json.loads(line)
+                h_chain = ReasoningSteps(line=jline["answer"], type="gsm8k_hypo")
+                context = ReasoningSteps(line=jline["question"])
+                r_chain = ReasoningSteps(line=jline["ground_truth"], type="gsm8k_ref")
+
+                hypothesises.append(h_chain)
+                contexts.append(context)
+                refs.append(r_chain)
         super().set_hypos(hypothesises)
         super().set_context(contexts)
         super().set_references(refs)

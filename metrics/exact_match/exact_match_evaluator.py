@@ -42,16 +42,14 @@ class ExactMatchEvaluator:
 
         for line in tqdm(lines, desc="Evaluating", unit="example"):
             item = json.loads(line)
-            problem = item['premise']
-            answer = item['gpt-3']
-            ground_truth = item['hypothesis'].split(
-                "IGNORE THIS. Ground truth here for reference. "
-            )[1]
+            problem = item['question']
+            answer = item['answer']
+            ground_truth = item['ground_truth']
 
             predicted = self.evaluate_answer(problem, answer, ground_truth)
 
             results.append({
-                "key": item.get("key", ""),
+                "question": item.get("question", ""),
                 "predicted": predicted
             })
         
