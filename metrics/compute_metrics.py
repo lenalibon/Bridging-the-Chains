@@ -6,6 +6,7 @@ import json
 
 from exact_match.exact_match_evaluator import ExactMatchEvaluator
 from f1_score.f1_score_evaluator import F1ScoreEvaluator
+from bert.bert_score_evaluator import BertScoreEvaluator
 from roscoe.roscoe import ReasoningEvaluator
 from roscoe.score import SENT_TRANS
 from roscoe.utils import save_scores, print_and_reset_max_gpu_memory
@@ -36,9 +37,18 @@ def run_roscoe(input_path, output_path, model_name, model_type, datasets, suffix
             save_scores(file_scores, out_file)
             print_and_reset_max_gpu_memory()
 
-def run_bert_score(in_file):
-    print(f"Running BERTScore on {in_file}")
-    #return compute_bert_score(in_file)
+def run_bert_score(input_path):
+    print(f"Running BERTScore on {input_path}")
+
+    evaluator = BertScoreEvaluator()
+    results = evaluator.evaluate(input_path)
+
+    output_file = input_path.replace(".json", "_bert_score_results.jsonl")
+    with open(output_file, "w", encoding="utf-8") as f:
+        for item in results:
+            f.write(json.dumps(item) + "\n")
+
+    print(f"BertScore results written to {output_file}")
 
 def run_f1_score(input_path):
     print(f"Running F1 score on {input_path}")
