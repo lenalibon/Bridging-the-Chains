@@ -1,16 +1,25 @@
-from transformers import AutoTokenizer, AutoModel
+import numpy as np
 import torch
 from sklearn.cluster import KMeans
-import numpy as np
+from transformers import AutoModel, AutoTokenizer
+
+from core.main import (
+    Chain,
+    Clusterer,
+    IdCluster,
+    ListChains,
+    MergerMaxProb,
+    Method,
+    SummarizingMergeFunction,
+)
 
 
 class EmbeddingCluster(Clusterer):
 
-    def __init__(self, k: int):
+    def __init__(self):
         self.tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
         self.model = AutoModel.from_pretrained("bert-base-uncased")
         self.model.eval()
-        self.k = k
 
     def compute_embedding(self, thought: str) -> torch.Tensor:
         """Takes a thought of a cot of a chain, and returns the embedding"""
@@ -27,7 +36,8 @@ class EmbeddingCluster(Clusterer):
         """
         # 1. Get kmeans cluster per chain
         X = np.array(chain_embeddings) # need to convert to numpy for sklearn
-        k = len(chain_embeddings) // 2 + 1
+        # NOTE: always halfs number of chains, can also specify in the constructor instead
+        k = len(chain_embeddings) // 2 + 1 
         labels = KMeans(n_clusters=k, random_state=0, n_init="auto").fit_predict(X)
 
         # 2. Change to IdCluster format
@@ -38,7 +48,6 @@ class EmbeddingCluster(Clusterer):
 
     def __call__(self, chains: ListChains) -> list[IdCluster]:
         """Computes an embedding for each chain, and then clusters the chains"""
-        chain: Chain
         # 1. Compute the embeddings for each chain
         chain_embeddings = list()
         for chain in chains:
@@ -56,12 +65,13 @@ class EmbeddingCluster(Clusterer):
         return clusters
     
 class EmbeddingMethodTest(Method):
-    """NOTE: just testing, delete after"""
+    """Dummy method for verifying that embedding clustering works"""
     def __init__(self, model, tokenizer, prompter, **kwargs): 
         # TODO: use a more powerful model for summarizing, maybe with an API call
         super().__init__(model, tokenizer, prompter,
                          merge_after=True,
-                         clusterer=EmbeddingCluster(k=4),
+                         merge_every=1,
+                         clusterer=EmbeddingCluster(),
                          merger=MergerMaxProb(SummarizingMergeFunction(model, tokenizer)),
                          post_merger=MergerMaxProb(SummarizingMergeFunction(model, tokenizer)),
                          **kwargs)
