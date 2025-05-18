@@ -3,6 +3,7 @@
 import argparse
 import os
 import json
+from dotenv import load_dotenv
 
 from exact_match.exact_match_evaluator import ExactMatchEvaluator
 from f1_score.f1_score_evaluator import F1ScoreEvaluator
@@ -10,7 +11,6 @@ from bert.bert_score_evaluator import BertScoreEvaluator
 from roscoe.roscoe import ReasoningEvaluator
 from roscoe.score import SENT_TRANS
 from roscoe.utils import save_scores, print_and_reset_max_gpu_memory
-from dotenv import load_dotenv
 
 def run_roscoe(input_path, output_path, model_name, model_type, datasets, suffix, scores, discourse_batch, coherence_batch):
     evaluator = ReasoningEvaluator(
@@ -39,10 +39,9 @@ def run_roscoe(input_path, output_path, model_name, model_type, datasets, suffix
 
 def run_bert_score(input_path):
     print(f"Running BERTScore on {input_path}")
-
+    
     evaluator = BertScoreEvaluator()
     results = evaluator.evaluate(input_path)
-
     output_file = input_path.replace(".json", "_bert_score_results.jsonl")
     with open(output_file, "w", encoding="utf-8") as f:
         for item in results:
@@ -52,14 +51,14 @@ def run_bert_score(input_path):
 
 def run_f1_score(input_path):
     print(f"Running F1 score on {input_path}")
+
     evaluator = F1ScoreEvaluator()
     results = evaluator.evaluate(input_path)
-
     output_file = input_path.replace(".json", "_f1_results.jsonl")
+
     with open(output_file, "w", encoding="utf-8") as f:
         for item in results:
             f.write(json.dumps(item) + "\n")
-
     print(f"F1 score results written to {output_file}")
 
 def run_exact_match(input_path):
@@ -79,10 +78,7 @@ if __name__ == "__main__":
     parser.add_argument("--input-path", type=str, required=True, help="Path to a single JSON file")
     parser.add_argument("--output-path", type=str, default="./roscoe/")
     parser.add_argument("--suffix", type=str, default="json")
-    parser.add_argument("--run-roscoe", action="store_true")
-    parser.add_argument("--run-bert", action="store_true")
-    parser.add_argument("--run-f1", action="store_true")
-    parser.add_argument("--run-em", action="store_true")
+    parser.add_argument("--metrics", nargs="+", choices=["bert", "f1", "em", "roscoe"], help="List of metrics to run")
     parser.add_argument("--model-type", type=str, default=SENT_TRANS)
     parser.add_argument("--model-name", type=str, default="facebook/roscoe-512-roberta-base")
     parser.add_argument("--discourse-batch", type=int, default=64)
@@ -97,24 +93,28 @@ if __name__ == "__main__":
     if not fpath.endswith(args.suffix):
         raise ValueError(f"Input file must end with .{args.suffix}")
 
-    if args.run_roscoe:
+    if not args.metrics:
+        raise ValueError("Please provide at least one metric using --metrics (e.g., --metrics bert f1 em)")
+
+    if "bert" in args.metrics:
+        run_bert_score(fpath)
+
+    if "f1" in args.metrics:
+        run_f1_score(fpath)
+
+    if "em" in args.metrics:
+        run_exact_match(fpath)
+
+    if "roscoe" in args.metrics:
         run_roscoe(
             input_path=fpath,
             output_path=args.output_path,
             model_name=args.model_name,
             model_type=args.model_type,
-            datasets=[],  # no longer used
+            datasets=[],
             suffix=args.suffix,
             scores=args.roscoe_scores,
             discourse_batch=args.discourse_batch,
             coherence_batch=args.coherence_batch,
         )
 
-    if args.run_bert:
-        run_bert_score(fpath)
-
-    if args.run_f1:
-        run_f1_score(fpath)
-
-    if args.run_em:
-        run_exact_match(fpath)
