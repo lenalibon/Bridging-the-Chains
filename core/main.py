@@ -21,8 +21,9 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
-from .utils import *
-from .prompts import *
+from utils import *
+from prompts import *
+from prompting.create_prompts_cot import build_prompt
 
 
 TokenIdsTensor = torch.Tensor # size: (sequence_length,)
@@ -34,7 +35,7 @@ IdCluster = list[int] # list of chain ids
 DataGetter = Callable[[], tuple['Dataset', str]] # function that returns a dataset and its label
 
 
-DEVICE = "cuda"
+DEVICE = "gpu" if torch.cuda.is_available() else "cpu"
 TEMPERATURE = 0.7
 
 MAX_STEPS = 8
@@ -45,7 +46,8 @@ PREFER_JSONIC_DEBUG = True
 def clear_cache():
     gc.collect()
     torch.cuda.empty_cache()
-    torch.cuda.ipc_collect()
+    if torch.cuda.is_available():
+        torch.cuda.ipc_collect()
 
 
 clear_cache()
@@ -508,15 +510,40 @@ class SimplePrompter(Prompter):
     def __call__(self, question):
         return self.template.substitute(question=question)
 
+class DiversifiedAutoCoTPrompter(Prompter):
+    """
+    Returns one few-shot prompt per chain index, with diversified expert.
+    """
+    def __init__(self,
+                 template: Template = None,
+                 folder_path: str = "../auto-cot/gsm8k_few_shot/",
+                 n_shots: int = 8):
+        self.template = template
+        self.folder_path = folder_path
+        self.n_shots = n_shots
+
+    def __call__(self, question, chain_index: int = 0) -> str:
+        return build_prompt(
+            question,
+            folder_path=self.folder_path,
+            n_shots=self.n_shots,
+            chain_index=chain_index
+        )
 
 class Experiment:
+    def __init__(self, n_chains_start: int = 8, n_shots: int = 8, folder_path: str = "../auto-cot/gsm8k_few_shot/"):
+        self.n_chains = n_chains_start
+        self.n_shots = n_shots
+        self.folder_path = folder_path
+
     def eval(self, **kwargs):
         logger.info("Running full evaluation...")
         # NOTE: A DataGetter is a function that returns a tuple with dataset and its label.
         # We might want to consider a wrapper class around datasets.Dataset instead.
         data_getters: list[DataGetter] = [partial(self.get_gsm8k, n=1)] # FIXME delete n=
         model, tokenizer = self.get_model_and_tokenizer()
-        prompter = SimplePrompter() # FIXME: TODO use autocot
+        prompter = DiversifiedAutoCoTPrompter(folder_path=self.folder_path, n_shots=self.n_shots)
+        #prompter = SimplePrompter(template=SIMPLE_PROMPT_TEMPLATE)
         methods = [
             BaselineGreedy(model, tokenizer, prompter, n_init_chains=8, label=f"BaselineGreedy-8"),
             # BaselineSimple(model, tokenizer, prompter, n_init_chains=4, label=f"BaselineSimple"),
@@ -558,8 +585,8 @@ class Experiment:
 
     def get_model_and_tokenizer(self):
         # TODO adapt code for Gemma (fix caching crashes)
-        model_name = "google/gemma-3-1b-it"
-        # model_name = "Qwen/Qwen2.5-0.5B-Instruct"
+        # model_name = "google/gemma-3-1b-it"
+        model_name = "Qwen/Qwen2.5-0.5B-Instruct"
         tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
         # logger.debug("padding_side=left")
         # TODO use_fast=True
@@ -603,4 +630,4 @@ def debug_panel(title, text):
 
 # Usage: python -m core.main
 if __name__ == "__main__":
-    fire.Fire(Experiment().eval)
+    fire.Fire(Experiment(n_shots=1).eval)
