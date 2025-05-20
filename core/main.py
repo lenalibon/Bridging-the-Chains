@@ -497,7 +497,6 @@ class TrivialClusterer(Clusterer):
         return [list(range(len(chains)))]
 
 
-# TODO adapt for needs of AutoCoT: e.g. does AutoCoT expect question index?
 class Prompter:
     def __call__(self, *args, **kwargs) -> str:
         raise NotImplementedError("Must be implemented in subclasses")
