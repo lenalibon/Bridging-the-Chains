@@ -42,7 +42,7 @@ ${few_shot_block}{
 )
 
 
-def _load_few_shots(folder_path: str = "../auto-cot/gsm8k_few_shot/", n_shots: int = 8) -> list:
+def _load_few_shots(folder_path: str = "auto-cot/gsm8k_few_shot/", n_shots: int = 8) -> list:
     prompt_files = [f for f in os.listdir(folder_path) if f.endswith(".json")]
     random.shuffle(prompt_files)
 
@@ -69,7 +69,7 @@ def _format_few_shots(shot: List[dict]) -> str:
 
 
 
-def build_prompt(question: str, folder_path: str = "../auto-cot/gsm8k_few_shot", n_shots: int = 8,
+def build_prompt(question: str, folder_path: str = "auto-cot/gsm8k_few_shot", n_shots: int = 8,
                  chain_index: int = 0) -> str:
     """
     Builds a single prompt for the given question and chain index using few-shot examples and diversification.

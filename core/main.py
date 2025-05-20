@@ -21,8 +21,8 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
-from utils import *
-from prompts import *
+from .utils import *
+from .prompts import *
 from prompting.create_prompts_cot import build_prompt
 
 
@@ -516,7 +516,7 @@ class DiversifiedAutoCoTPrompter(Prompter):
     """
     def __init__(self,
                  template: Template = None,
-                 folder_path: str = "../auto-cot/gsm8k_few_shot/",
+                 folder_path: str = "auto-cot/gsm8k_few_shot/",
                  n_shots: int = 8):
         self.template = template
         self.folder_path = folder_path
@@ -531,7 +531,7 @@ class DiversifiedAutoCoTPrompter(Prompter):
         )
 
 class Experiment:
-    def __init__(self, n_chains_start: int = 8, n_shots: int = 8, folder_path: str = "../auto-cot/gsm8k_few_shot/"):
+    def __init__(self, n_chains_start: int = 8, n_shots: int = 8, folder_path: str = "auto-cot/gsm8k_few_shot/"):
         self.n_chains = n_chains_start
         self.n_shots = n_shots
         self.folder_path = folder_path
@@ -630,4 +630,4 @@ def debug_panel(title, text):
 
 # Usage: python -m core.main
 if __name__ == "__main__":
-    fire.Fire(Experiment(n_shots=1).eval)
+    fire.Fire(Experiment(n_shots=4).eval)
