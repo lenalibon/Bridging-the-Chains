@@ -358,7 +358,7 @@ class Stepper:
         else:
             pkv = None
         out = self.model.generate(input_token_ids, # type: ignore
-                                  past_key_values=chain.pkv,
+                                  past_key_values=pkv,
                                   generation_config=self.gen_config,
                                   tokenizer=self.tokenizer,
                                   cache_implementation=None,
