@@ -6,6 +6,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from core.chain import Chain, Chains, ListChains
 from core.constants import *
+from core.experiment_config import ExperimentConfig
 from core.stepper import Stepper # type: ignore
 
 
@@ -22,14 +23,15 @@ class MergeFunction:
 
 
 class SummarizingMergeFunction(MergeFunction):
-    def __init__(self, model: AutoModelForCausalLM, tokenizer: AutoTokenizer):
+    def __init__(self, model: AutoModelForCausalLM, tokenizer: AutoTokenizer, config: ExperimentConfig):
         self.model = model
         self.tokenizer = tokenizer
+        self.config = config
         # NOTE: when merging use_cache=False to avoid issues with Gemma.
         # I have found that if the cache is large, Gemma becomes deranged and generates at most one valid step.
         # When merging, the cache is usually large because the prompt is long.
         # This may become an issue with AutoCoT as well :/
-        self.stepper = Stepper(model, tokenizer, use_cache=False)
+        self.stepper = Stepper(model, tokenizer, config = config)
 
     def __call__(self, chain_list: list[Chain]) -> Chain:
         """Returns a single chain being the result of an LLM call to summarize the chains"""

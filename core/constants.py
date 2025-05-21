@@ -18,10 +18,6 @@ IdCluster = list[int] # list of chain ids
 DataGetter = Callable[[], tuple['Dataset', str]] # function that returns a dataset and its label
 
 
-DEVICE = "cpu"
-TEMPERATURE = 0.7
-
-MAX_STEPS = 8
-MAX_TOKENS_PER_STEP = 100
+DEVICE = "mps"
 
 PREFER_JSONIC_DEBUG = False

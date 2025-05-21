@@ -12,7 +12,7 @@ class Prompter:
 
 
 class SimplePrompter(Prompter):
-    def __init__(self, template: Template = SIMPLE_PROMPT_TEMPLATE):
+    def __init__(self, template: Template = SIMPLE_PROMPT_TEMPLATE, *arg, **kwargs):
         self.template = template
 
     def __call__(self, question):

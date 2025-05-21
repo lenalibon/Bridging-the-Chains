@@ -7,6 +7,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from clustering.embedding import EmbeddingCluster
 from core.chain import Chains, ListChains
 from core.clusterer import Clusterer, TrivialClusterer
+from core.experiment_config import ExperimentConfig
 from core.merger import Merger, MergerMaxProb, SummarizingMergeFunction, TrivialMergeFunction
 from core.prompter import Prompter
 from core.stepper import Stepper # type: ignore
@@ -33,13 +34,13 @@ class Method:
                  model: AutoModelForCausalLM,
                  tokenizer: AutoTokenizer,
                  prompter: 'Prompter',
+                 config: ExperimentConfig,
                  clusterer: Optional['Clusterer'] = None,
                  merger: Optional['Merger'] = None,
                  post_merger: Optional['Merger'] = None,
-                 n_init_chains: int = 1,
-                 merge_every: int | bool = False,
-                 merge_after: bool = False,
-                 label = None):
+                 label = None,
+                 n_init_chains: int = 1
+                 ):
         self.model = model
         self.tokenizer = tokenizer
         self.prompter = prompter
@@ -50,12 +51,12 @@ class Method:
         # Why not one merger? for flexibility
         self.post_merger = post_merger
         # The number of initial chains to generate, at first step.
-        self.n_init_chains = n_init_chains
-        self.merge_every = merge_every
-        self.merge_after = merge_after
+        self.n_init_chains = n_init_chains 
+        self.merge_every = config.merge_every
+        self.merge_after = config.merge_after 
         # The label is used in the filename with the method results
         self.label = label or self.__class__.__name__
-        self.stepper = Stepper(model, tokenizer, use_cache=False)
+        self.stepper = Stepper(model, tokenizer, config = config)
 
         # WARNING: possibly not all tokenizers tokenize newlines the "right way": tokens for `\n`, `\n\n`, `\n\n\n`, etc.
         # self.stop_token_ids = [tokenizer.convert_tokens_to_ids('\n'), tokenizer.eos_token_id]
@@ -93,38 +94,35 @@ class Method:
 
 class BaselineGreedy(Method):
     """Select the answer from the single chain with the highest probability without merging or clustering"""
-    def __init__(self, model, tokenizer, prompter, **kwargs):
+    def __init__(self, model, tokenizer, prompter, config, **kwargs):
         # In the greedy baseline,
         # 1. "merging" happens after generation,
         # 2. and "merging" is really just selecting the highest-probability chain.
-        super().__init__(model, tokenizer, prompter,
-                         merge_after=True,
+        super().__init__(model, tokenizer, prompter, config,
                          clusterer=TrivialClusterer(),
                          post_merger=MergerMaxProb(TrivialMergeFunction()),
                          **kwargs)
 
 class BaselineAggregation(Method):
     """Aggregation Approach: Aggregating all answers into a single output without clustering."""
-    def __init__(self, model, tokenizer, prompter, **kwargs):
-        super().__init__(model, tokenizer, prompter,
-                         merge_after=True,
+    def __init__(self, model, tokenizer, prompter, config, **kwargs):
+        super().__init__(model, tokenizer, prompter, config,
                          clusterer=TrivialClusterer(),
-                         post_merger=Merger(SummarizingMergeFunction(model, tokenizer)),
+                         post_merger=Merger(SummarizingMergeFunction(model, tokenizer, config)),
                          **kwargs)
 
 
 class BaselineSimple(Method):
     "No branching, no clustering, no merging"
-    def __init__(self, model, tokenizer, prompter, **kwargs):
-        super().__init__(model, tokenizer, prompter, **kwargs)
+    def __init__(self, model, tokenizer, prompter, config, **kwargs):
+        super().__init__(model, tokenizer, prompter, config **kwargs)
 
 class EmbeddingMethodTest(Method):
     """Dummy method for verifying that embedding clustering works"""
-    def __init__(self, model, tokenizer, prompter, **kwargs): 
+    def __init__(self, model, tokenizer, prompter, config, **kwargs): 
         # TODO: use a more powerful model for summarizing, maybe with an API call
-        super().__init__(model, tokenizer, prompter,
-                         merge_after=True,
+        super().__init__(model, tokenizer, prompter, config,
                          clusterer=EmbeddingCluster(),
-                         merger=MergerMaxProb(SummarizingMergeFunction(model, tokenizer)),
-                         post_merger=MergerMaxProb(SummarizingMergeFunction(model, tokenizer)),
+                         merger=MergerMaxProb(SummarizingMergeFunction(model, tokenizer, config)),
+                         post_merger=MergerMaxProb(SummarizingMergeFunction(model, tokenizer, config)),
                          **kwargs)

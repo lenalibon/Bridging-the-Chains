@@ -1,6 +1,8 @@
 from functools import partial
 from pathlib import Path
 
+from core.method import BaselineAggregation, BaselineGreedy, BaselineSimple
+from core.prompter import DiversifiedAutoCoTPrompter, SimplePrompter
 import datasets
 import fire
 from datasets import Dataset
@@ -12,11 +14,9 @@ from transformers import (  # type: ignore
 )
 
 from core.chain import Chains
-from core.constants import DEVICE, MAX_STEPS, MAX_TOKENS_PER_STEP, DataGetter
-from core.method import BaselineAggregation, BaselineGreedy, BaselineSimple, EmbeddingMethodTest
-from core.prompter import DiversifiedAutoCoTPrompter, SimplePrompter
+from core.constants import DEVICE, DataGetter
 from core.utils import get_logger, get_timestamp, write_jsonl
-
+from core.experiment_config import experiment_config, ExperimentConfig
 
 import gc
 
@@ -34,33 +34,34 @@ def clear_cache():
 
 
 clear_cache()
-
-
 set_seed(42)
 
+method_mappings = {
+    'greedy': BaselineGreedy,
+    'aggregation': BaselineAggregation,
+    'simple': BaselineSimple
+}
 
-
-
+prompter_mappings = {
+    'simple': SimplePrompter,
+    'diversified_auto_cot': DiversifiedAutoCoTPrompter
+}
 
 class Experiment:
-    def __init__(self, n_chains_start: int = 8, n_shots: int = 8, folder_path: str = "auto-cot/gsm8k_few_shot/"):
-        self.n_chains = n_chains_start
-        self.n_shots = n_shots
-        self.folder_path = folder_path
+    def __init__(self, config: ExperimentConfig):
+        self.config = config
 
     def eval(self, **kwargs):
         logger.info("Running full evaluation...")
         # NOTE: A DataGetter is a function that returns a tuple with dataset and its label.
         # We might want to consider a wrapper class around datasets.Dataset instead.
-        data_getters: list[DataGetter] = [partial(self.get_gsm8k, n=1)] # FIXME delete n=
+        data_getters: list[DataGetter] = [partial(self.get_gsm8k, n=self.config.num_samples_eval)] # FIXME delete n=
         model, tokenizer = self.get_model_and_tokenizer()
-        prompter = DiversifiedAutoCoTPrompter(folder_path=self.folder_path, n_shots=self.n_shots)
-        #prompter = SimplePrompter(template=SIMPLE_PROMPT_TEMPLATE)
+        prompter = prompter_mappings[self.config.prompter](folder_path = self.config.few_shots_folder_path, n_shots = self.config.num_few_shots) # FIXME: TODO use autocot
         methods = [
-            # BaselineAggregation(model, tokenizer, prompter, n_init_chains=8, label="Aggregation-8")
-            # EmbeddingMethodTest(model, tokenizer, prompter, n_init_chains=8, label="EmbeddingClustering-8")
-            # BaselineGreedy(model, tokenizer, prompter, n_init_chains=1, label="BaselineGreedy-8"),
-            BaselineSimple(model, tokenizer, prompter, n_init_chains=1, label=f"BaselineSimple"),
+            method_mappings[method](model, tokenizer, prompter, self.config,
+                   label=method.__class__.__name__, n_init_chains = n_init_chains)
+            for method, n_init_chains in zip(self.config.methods, self.config.n_init_chains)
         ]
         for get_data in data_getters:
             eval_data, dataset_label = get_data()
@@ -90,15 +91,15 @@ class Experiment:
         
     def get_gsm8k(self, n=None) -> tuple['Dataset', str]:
         # NOTE: using the train split for evaluation
-        split = datasets.load_dataset("gsm8k", "main")["test"] # type: ignore
-        label = "gsm8k"
+        split = datasets.load_dataset(self.config.dataset, "main")["test"] # type: ignore
+        label = self.config.dataset 
         if n is not None:
             split = split.select(range(n)) # type: ignore
-            label = f"gsm8k-first{n}"
+            label = f"{self.config.dataset}-first{n}"
         return (split, label) # type: ignore
 
     def get_model_and_tokenizer(self):
-        model_name = "google/gemma-3-1b-it"
+        model_name = self.config.model_name 
         # model_name = "Qwen/Qwen2.5-0.5B-Instruct"
         tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
         # model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=BitsAndBytesConfig(load_in_8bit=True))
@@ -108,4 +109,4 @@ class Experiment:
 
 # Usage: python -m core.main
 if __name__ == "__main__":
-    fire.Fire(Experiment(n_shots=4).eval)
+    fire.Fire(Experiment(config = experiment_config).eval)
