@@ -584,8 +584,8 @@ class Experiment:
 
     def get_model_and_tokenizer(self):
         # TODO adapt code for Gemma (fix caching crashes)
-        # model_name = "google/gemma-3-1b-it"
-        model_name = "Qwen/Qwen2.5-0.5B-Instruct"
+        model_name = "google/gemma-3-1b-it"
+        # model_name = "Qwen/Qwen2.5-0.5B-Instruct"
         tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
         # logger.debug("padding_side=left")
         # TODO use_fast=True
