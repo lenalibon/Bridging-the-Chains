@@ -14,10 +14,12 @@ class ExperimentConfig(TypedDict):
     merge_after: bool
     merge_every: int | bool
 
+
     dataset: str
     model_name: str
     few_shots_folder_path: str
     use_cache: bool
+    device: str
 
 experiment_config_data = {
     "methods": ['greedy', 'aggregation'], #['greedy', 'aggregation', 'simple']
@@ -35,7 +37,8 @@ experiment_config_data = {
     "dataset": "gsm8k",
     "model_name": "google/gemma-3-1b-it",
     "few_shots_folder_path": "auto-cot/gsm8k_few_shot/",
-    "use_cache": True
+    "use_cache": True,
+    "device": "mps"
 }
 
 experiment_config: ExperimentConfig = Munch.fromDict(experiment_config_data)

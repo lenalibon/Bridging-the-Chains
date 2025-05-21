@@ -1,3 +1,4 @@
+import argparse
 from functools import partial
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from transformers import (  # type: ignore
 )
 
 from core.chain import Chains
-from core.constants import DEVICE, DataGetter
+from core.constants import DataGetter
 from core.utils import get_logger, get_timestamp, write_jsonl
 from core.experiment_config import experiment_config, ExperimentConfig
 
@@ -103,10 +104,18 @@ class Experiment:
         # model_name = "Qwen/Qwen2.5-0.5B-Instruct"
         tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
         # model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=BitsAndBytesConfig(load_in_8bit=True))
-        model = AutoModelForCausalLM.from_pretrained(model_name).to(DEVICE)
+        model = AutoModelForCausalLM.from_pretrained(model_name).to(self.config.device)
         return model, tokenizer
 
 
 # Usage: python -m core.main
 if __name__ == "__main__":
-    fire.Fire(Experiment(config = experiment_config).eval)
+    parser = argparse.ArgumentParser(description="Run experiment.")
+    parser.add_argument("--n_chains", type=int, default=8, help="Number of chains to start with.")
+    parser.add_argument("--n_shots", type=int, default=5, help="Number of few-shot examples.")
+    parser.add_argument("--folder_path", type=str, default="auto-cot/gsm8k_few_shot/", help="Path to already generated few-shot examples.")
+
+    args = parser.parse_args()
+
+    exp = Experiment(n_chains_start=args.n_chains, n_shots=args.n_shots, folder_path=args.folder_path)
+    fire.Fire(exp.eval)

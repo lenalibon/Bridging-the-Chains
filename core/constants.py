@@ -18,6 +18,4 @@ IdCluster = list[int] # list of chain ids
 DataGetter = Callable[[], tuple['Dataset', str]] # function that returns a dataset and its label
 
 
-DEVICE = "mps"
-
 PREFER_JSONIC_DEBUG = False

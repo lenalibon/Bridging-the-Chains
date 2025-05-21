@@ -5,7 +5,7 @@ from typing import Optional
 from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
 
 from core.chain import Chain, ListChains
-from core.constants import DEVICE, PREFER_JSONIC_DEBUG # type: ignore
+from core.constants import PREFER_JSONIC_DEBUG # type: ignore
 from transformers import (  # type: ignore
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -62,7 +62,7 @@ class Stepper:
         return ListChains.from_list([self.first_step_in_one(prompt, index=index, **kw) for index in range(n)])
 
     def first_step_in_one(self, prompt: str, index: Optional[int] = None, question: Optional[str] = None) -> Chain:
-        input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(DEVICE) # type: ignore
+        input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.config.device) # type: ignore
         prompt_offset = input_ids.shape[1]
         pkv = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step) if self.gen_config.use_cache else None
         out = self.model.generate(input_ids, # type: ignore

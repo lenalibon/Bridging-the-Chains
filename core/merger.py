@@ -57,7 +57,7 @@ class SummarizingMergeFunction(MergeFunction):
         prompt = SIMPLE_PROMPT_TEMPLATE.substitute(question=question)
         new_prompt = prompt + '\n'.join(sum_chain.get_generated_lines())
         debug_panel(logger, "New merged prompt", new_prompt)
-        token_ids = self.tokenizer(new_prompt, return_tensors="pt").input_ids.to(DEVICE) # type: ignore
+        token_ids = self.tokenizer(new_prompt, return_tensors="pt").input_ids.to(self.config.device) # type: ignore
         prompt_offset = token_len(self.tokenizer, prompt)
         new_chain = Chain(self.tokenizer, 
                           token_ids,
