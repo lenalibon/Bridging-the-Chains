@@ -112,11 +112,7 @@ class Experiment:
 # Usage: python -m core.main
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run experiment.")
-    parser.add_argument("--n_chains", type=int, default=8, help="Number of chains to start with.")
-    parser.add_argument("--n_shots", type=int, default=5, help="Number of few-shot examples.")
-    parser.add_argument("--folder_path", type=str, default="auto-cot/gsm8k_few_shot/", help="Path to already generated few-shot examples.")
-
     args = parser.parse_args()
 
-    exp = Experiment(n_chains_start=args.n_chains, n_shots=args.n_shots, folder_path=args.folder_path)
+    exp = Experiment(experiment_config)
     fire.Fire(exp.eval)
