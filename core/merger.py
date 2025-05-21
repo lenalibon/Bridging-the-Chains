@@ -36,7 +36,7 @@ class SummarizingMergeFunction(MergeFunction):
         # TODO take precautions against infinite while-looping
         prompt = self.prepare_summarizing_prompt(chain_list)
         debug_panel(logger, "Summarizing prompt", prompt)
-        sum_chain = self.stepper.first_step_in_one(prompt)
+        sum_chain = self.stepper.first_step_in_one_summarization(prompt)
         while not sum_chain.is_complete():
             sum_chain = self.stepper.next_step_in_one(sum_chain)
             # debug_panel("Generated lines", repr(sum_chain.get_generated_lines()))
