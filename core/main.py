@@ -15,6 +15,9 @@ from transformers import (  # type: ignore
 )
 
 from core.chain import Chains
+from core.constants import DEVICE, DataGetter
+from core.method import BaselineSimple
+from core.prompter import DiversifiedAutoCoTPrompter
 from core.constants import DataGetter
 from core.utils import get_logger, get_timestamp, write_jsonl
 from core.experiment_config import experiment_config, ExperimentConfig
@@ -22,8 +25,6 @@ from core.experiment_config import experiment_config, ExperimentConfig
 import gc
 
 from .utils import *
-from .prompts import *
-from prompting.create_prompts_cot import build_prompt
 
 logger = get_logger()
 

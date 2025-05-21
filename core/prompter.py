@@ -1,10 +1,6 @@
-from string import Template
-
 from prompting.create_prompts_cot import build_prompt
 
-
-from .utils import *
-from .prompts import *
+from prompting.prompts import *
 
 class Prompter:
     def __call__(self, *args, **kwargs) -> str:

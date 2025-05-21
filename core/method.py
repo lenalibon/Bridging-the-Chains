@@ -15,7 +15,6 @@ from core.stepper import Stepper # type: ignore
 
 
 from .utils import *
-from .prompts import *
 
 # ### Summary of the planned Methods
 # - [DONE] BaselineGreedy: select the answer from the single chain with the highest probability without merging or clustering.
@@ -70,9 +69,7 @@ class Method:
         """
         set_seed(42)
         assert self.prompter
-        prompt: str = self.prompter(question)
-        debug_panel(logger, "Prompt", prompt)
-        chains: ListChains = self.stepper.first_step_in_all(prompt, question=question, n=self.n_init_chains)
+        chains: ListChains = self.stepper.first_step_in_all(prompter = self.prompter, question=question, n=self.n_init_chains)
         counter = 1
         while not chains.all_complete():
             if self.merge_every and counter % self.merge_every == 0:

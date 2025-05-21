@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from core.constants import BatchedTokenIdsTensor, Scores
 
 from .utils import *
-from .prompts import *
+from prompting.prompts import *
 
 logger = get_logger()
 

@@ -12,7 +12,7 @@ from core.stepper import Stepper # type: ignore
 
 
 from .utils import *
-from .prompts import *
+from prompting.prompts import *
 
 logger = get_logger()
 
