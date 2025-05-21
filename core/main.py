@@ -40,7 +40,9 @@ TEMPERATURE = 0.7
 MAX_STEPS = 8
 MAX_TOKENS_PER_STEP = 100
 
-PREFER_JSONIC_DEBUG = True
+USE_CACHE = True
+
+PREFER_JSONIC_DEBUG = False
 
 def clear_cache():
     gc.collect()
@@ -66,8 +68,8 @@ class Chain:
                  prompt_offset: int,
                  scores: Optional[Scores] = tuple(),
                  pkv: Optional[Cache] = None,
-                 index: Optional[int] = None,
-                 n_lines: Optional[int] = None,
+                 index: int = 255,
+                 n_lines: int = 1,
                  question: Optional[str] = None,
                 ):
         self.tokenizer = tokenizer
@@ -219,7 +221,7 @@ class ListChains(Chains):
  
 # ### Summary of the planned Methods
 # - [DONE] BaselineGreedy: select the answer from the single chain with the highest probability without merging or clustering.
-# - [WIP] BaselineAggregate: aggregate all answers into a single output without clustering.
+# - [DONE] BaselineAggregate: aggregate all answers into a single output without clustering.
 # - MethodMergingDuringGeneration: 
 #   - MethodMergingRepresentatives:
 #     - MethodMergingRepresentativesMaxProb
@@ -255,7 +257,7 @@ class Method:
         self.merge_after = merge_after
         # The label is used in the filename with the method results
         self.label = label or self.__class__.__name__
-        self.stepper = Stepper(model, tokenizer)
+        self.stepper = Stepper(model, tokenizer, use_cache=USE_CACHE)
 
         # WARNING: possibly not all tokenizers tokenize newlines the "right way": tokens for `\n`, `\n\n`, `\n\n\n`, etc.
         # self.stop_token_ids = [tokenizer.convert_tokens_to_ids('\n'), tokenizer.eos_token_id]
@@ -297,7 +299,7 @@ class Stepper:
 
     Used in `Method` and `SummarizingMergeFunction`
     """
-    def __init__(self, model: AutoModelForCausalLM, tokenizer: AutoTokenizer):
+    def __init__(self, model: AutoModelForCausalLM, tokenizer: AutoTokenizer, use_cache = True):
         self.model = model
         self.tokenizer = tokenizer
         stop_string = "\n"
@@ -310,6 +312,7 @@ class Stepper:
             output_scores=True,
             # eos_token_id=self.stop_token_ids,
             stop_strings=stop_string,
+            use_cache=use_cache,
         )
         # NOTE: On the difference between `scores` and `logits`,
         # see https://huggingface.co/docs/transformers/v4.51.3/en/internal/generation_utils#transformers.generation.GenerateDecoderOnlyOutput
@@ -320,7 +323,7 @@ class Stepper:
     def first_step_in_one(self, prompt: str, index: Optional[int] = None, question: Optional[str] = None) -> Chain:
         input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(DEVICE) # type: ignore
         prompt_offset = input_ids.shape[1]
-        pkv = prepare_pkv(self.model, prompt_offset)
+        pkv = prepare_pkv(self.model, prompt_offset) if self.gen_config.use_cache else None
         out = self.model.generate(input_ids, # type: ignore
                                   past_key_values=pkv,
                                   generation_config=self.gen_config,
@@ -350,8 +353,12 @@ class Stepper:
 
     def next_step_in_one(self, chain: Chain) -> Chain:
         input_token_ids = chain.token_ids
+        if self.gen_config.use_cache:
+            pkv = chain.pkv or prepare_pkv(self.model, input_token_ids.shape[1], max_steps=MAX_STEPS-chain.n_lines)
+        else:
+            pkv = None
         out = self.model.generate(input_token_ids, # type: ignore
-                                  past_key_values=chain.pkv,
+                                  past_key_values=pkv,
                                   generation_config=self.gen_config,
                                   tokenizer=self.tokenizer,
                                   cache_implementation=None,
@@ -385,25 +392,47 @@ class SummarizingMergeFunction(MergeFunction):
     def __init__(self, model: AutoModelForCausalLM, tokenizer: AutoTokenizer):
         self.model = model
         self.tokenizer = tokenizer
-        self.stepper = Stepper(model, tokenizer)
+        # NOTE: when merging use_cache=False to avoid issues with Gemma.
+        # I have found that if the cache is large, Gemma becomes deranged and generates at most one valid step.
+        # When merging, the cache is usually large because the prompt is long.
+        # This may become an issue with AutoCoT as well :/
+        self.stepper = Stepper(model, tokenizer, use_cache=False)
 
     def __call__(self, chain_list: list[Chain]) -> Chain:
         """Returns a single chain being the result of an LLM call to summarize the chains"""
-        # TODO test this
         # TODO take precautions against infinite while-looping
         prompt = self.prepare_summarizing_prompt(chain_list)
         debug_panel("Summarizing prompt", prompt)
         sum_chain = self.stepper.first_step_in_one(prompt)
         while not sum_chain.is_complete():
             sum_chain = self.stepper.next_step_in_one(sum_chain)
-        return sum_chain
-        
+            # debug_panel("Generated lines", repr(sum_chain.get_generated_lines()))
+        new_chain = self.make_new_chain(chain_list, sum_chain)
+        return new_chain
         
     def prepare_summarizing_prompt(self, chain_list: list[Chain]) -> str:
         question = chain_list[0].question
-        cot_steps_json = ''.join([chain.jsonic_repr for chain in chain_list])
-        prompt = SUMMARIZING_PROMPT_TEMPLATE.substitute(question=question, cot_steps=cot_steps_json)
+        jsonic_solutions = '\n'.join([chain.jsonic_repr for chain in chain_list])
+        prompt = SUMMARIZING_PROMPT_TEMPLATE.substitute(question=question, solutions=jsonic_solutions)
         return prompt
+
+    def make_new_chain(self, chain_list: list[Chain], sum_chain: Chain) -> Chain:
+        # FIXME: prompt template of the new chain is to be decided
+        question = chain_list[0].question
+        prompt = SIMPLE_PROMPT_TEMPLATE.substitute(question=question)
+        new_prompt = prompt + '\n'.join(sum_chain.get_generated_lines())
+        debug_panel("New merged prompt", new_prompt)
+        token_ids = self.tokenizer(new_prompt, return_tensors="pt").input_ids.to(DEVICE) # type: ignore
+        prompt_offset = token_len(self.tokenizer, prompt)
+        new_chain = Chain(self.tokenizer, 
+                          token_ids,
+                          prompt_offset,
+                          scores=None, # WARNING: log probs should not computed for merged chains
+                          pkv=None,
+                          index=max([chain.index for chain in chain_list]),
+                          n_lines=len(sum_chain.get_generated_lines()),
+                          question=chain_list[0].question)
+        return new_chain
 
 
 class TrivialMergeFunction(MergeFunction):
@@ -450,10 +479,10 @@ class MergerClusterCentroid(Merger):
 class MergerWithinCluster(Merger):
     def __call__(self, chains, chain_id_clusters) -> Chains:
         assert self.merge_fn
-        return Chains.from_list([ self.merge_fn(self.get_chain_cluster(chains, id_cluster)) for id_cluster in chain_id_clusters ])
+        return ListChains.from_list([ self.merge_fn(self.get_chain_cluster(chains, id_cluster)) for id_cluster in chain_id_clusters ])
 
     def get_chain_cluster(self, chains, id_cluster) -> list[Chain]:
-        raise NotImplementedError("TODO")
+        return [chains[i] for i in id_cluster]
     
 
 class BaselineGreedy(Method):
@@ -474,7 +503,7 @@ class BaselineAggregation(Method):
         super().__init__(model, tokenizer, prompter,
                          merge_after=True,
                          clusterer=TrivialClusterer(),
-                         post_merger=Merger(SummarizingMergeFunction(model, tokenizer)),
+                         post_merger=MergerWithinCluster(SummarizingMergeFunction(model, tokenizer)),
                          **kwargs)
 
 
@@ -557,21 +586,18 @@ class Experiment:
         return (split, label) # type: ignore
 
     def get_model_and_tokenizer(self):
-        # TODO adapt code for Gemma (fix caching crashes)
         model_name = "google/gemma-3-1b-it"
         # model_name = "Qwen/Qwen2.5-0.5B-Instruct"
         tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
-        # logger.debug("padding_side=left")
-        # TODO use_fast=True
         # model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=BitsAndBytesConfig(load_in_8bit=True))
         model = AutoModelForCausalLM.from_pretrained(model_name).to(DEVICE)
         return model, tokenizer
 
 
-def prepare_pkv(model, n_input_tokens):
+def prepare_pkv(model, n_input_tokens, max_steps=MAX_STEPS):
     model_name = model.__class__.__name__
     if 'Gemma' in model_name:
-        max_cache_len = n_input_tokens + MAX_STEPS * MAX_TOKENS_PER_STEP
+        max_cache_len = n_input_tokens + max_steps * MAX_TOKENS_PER_STEP
         logger.debug(f"Preparing HybridCache for {model_name} with max_cache_len={max_cache_len}")
         return HybridCache(config=model.config,
                            max_batch_size=1,

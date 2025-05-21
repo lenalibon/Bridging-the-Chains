@@ -20,16 +20,34 @@ SIMPLE_PROMPT_TEMPLATE = Template('''You are a math tutor. You will be given a m
 
 
 
-SUMMARIZING_PROMPT_TEMPLATE = Template('''Please merge the following chains of thought into one coherent chain of thought.
+SUMMARIZING_PROMPT_TEMPLATE_v1 = Template('''Question: "${question}"
+Here are some potential solutions:
+${solutions}
 
-${cot_steps}
+Given these solutions, please consider their consistency, and please provide a correct solution to the question with clear reasoning and step-by-step calculations.
+Please state the final answer clearly at the last step.
+
 {
   "question": "${question}",
   "cot_steps": [
 ''')
 
+SUMMARIZING_PROMPT_TEMPLATE_v2 = Template('''You are a math tutor. You will be given a math question and some example solutions and you need to answer the question step by step, in JSON format. Let's think step by step.
+
+{
+  "question": "${question}",
+}
+${solutions}
+{
+  "question": "${question}",
+  "cot_steps": [
+''')
+
+SUMMARIZING_PROMPT_TEMPLATE = SUMMARIZING_PROMPT_TEMPLATE_v1
 
 
+
+# "question": "${question}",
 CHAIN_JSON_TEMPLATE = Template('''{
   "question": "${question}",
   "cot_steps": [
