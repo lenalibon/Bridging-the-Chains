@@ -3,15 +3,9 @@ import torch
 from sklearn.cluster import KMeans
 from transformers import AutoModel, AutoTokenizer
 
-from core.main import (
-    Chain,
-    Clusterer,
-    IdCluster,
-    ListChains,
-    MergerMaxProb,
-    Method,
-    SummarizingMergeFunction,
-)
+from core.chain import ListChains
+from core.clusterer import Clusterer
+from core.constants import IdCluster
 
 
 class EmbeddingCluster(Clusterer):
@@ -63,15 +57,4 @@ class EmbeddingCluster(Clusterer):
         # 2. Cluster the embeddings
         clusters = self.kmeans(chain_embeddings)
         return clusters
-    
-class EmbeddingMethodTest(Method):
-    """Dummy method for verifying that embedding clustering works"""
-    def __init__(self, model, tokenizer, prompter, **kwargs): 
-        # TODO: use a more powerful model for summarizing, maybe with an API call
-        super().__init__(model, tokenizer, prompter,
-                         merge_after=True,
-                         merge_every=1,
-                         clusterer=EmbeddingCluster(),
-                         merger=MergerMaxProb(SummarizingMergeFunction(model, tokenizer)),
-                         post_merger=MergerMaxProb(SummarizingMergeFunction(model, tokenizer)),
-                         **kwargs)
+
