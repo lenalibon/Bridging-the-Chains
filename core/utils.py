@@ -31,7 +31,7 @@ def get_newline_token_id(tokenizer):
     return newline_token
 
 
-def tokenlen(tokenizer, prompt: str) -> int:
+def token_len(tokenizer, prompt: str) -> int:
     return len(tokenizer(prompt)["input_ids"])
 
 
