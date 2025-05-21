@@ -68,9 +68,6 @@ class Method:
         """
         set_seed(42)
         assert self.prompter
-        # TODO ab hier Lena
-        # prompt: str = self.prompter(question)
-        # debug_panel(logger, "Prompt", prompt)
         chains: ListChains = self.stepper.first_step_in_all(prompter = self.prompter, question=question, n=self.n_init_chains)
         counter = 1
         while not chains.all_complete():
