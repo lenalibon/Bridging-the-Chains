@@ -1,3 +1,4 @@
+from typing import Optional
 import numpy as np
 import torch
 from sklearn.cluster import KMeans
@@ -56,7 +57,7 @@ class EmbeddingCluster(Clusterer):
     def get_embeddings(self):
         return self.embeddings
 
-    def __call__(self, chains: ListChains) -> list[IdCluster]:
+    def __call__(self, chains: ListChains, question: Optional[str] = None) -> list[IdCluster]:
         """Computes an embedding for each chain, and then clusters the chains"""
         # 1. Compute the embeddings for each chain
         chain_embeddings = list()
