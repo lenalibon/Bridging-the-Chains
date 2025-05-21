@@ -88,15 +88,6 @@ SIMPLE_PROMPT_TEMPLATE = Template('''You are a math tutor. You will be given a m
 
 
 
-SUMMARIZING_PROMPT_TEMPLATE = Template('''Please merge the following chains of thought into one coherent chain of thought.
-
-${cot_steps}
-{
-  "question": "${question}",
-  "cot_steps": [
-''')
-
-
 
 CHAIN_JSON_TEMPLATE = Template('''{
   "question": "${question}",

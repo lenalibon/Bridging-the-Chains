@@ -55,7 +55,7 @@ class Method:
         self.merge_after = merge_after
         # The label is used in the filename with the method results
         self.label = label or self.__class__.__name__
-        self.stepper = Stepper(model, tokenizer)
+        self.stepper = Stepper(model, tokenizer, use_cache=False)
 
         # WARNING: possibly not all tokenizers tokenize newlines the "right way": tokens for `\n`, `\n\n`, `\n\n\n`, etc.
         # self.stop_token_ids = [tokenizer.convert_tokens_to_ids('\n'), tokenizer.eos_token_id]
@@ -124,7 +124,6 @@ class EmbeddingMethodTest(Method):
         # TODO: use a more powerful model for summarizing, maybe with an API call
         super().__init__(model, tokenizer, prompter,
                          merge_after=True,
-                         merge_every=1,
                          clusterer=EmbeddingCluster(),
                          merger=MergerMaxProb(SummarizingMergeFunction(model, tokenizer)),
                          post_merger=MergerMaxProb(SummarizingMergeFunction(model, tokenizer)),

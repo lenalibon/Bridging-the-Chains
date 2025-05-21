@@ -31,13 +31,14 @@ def prepare_pkv(model, n_input_tokens):
     else:
         return None
 
+
 class Stepper:
     """
     Functionality for next step generation, in one class
 
     Used in `Method` and `SummarizingMergeFunction`
     """
-    def __init__(self, model: AutoModelForCausalLM, tokenizer: AutoTokenizer):
+    def __init__(self, model: AutoModelForCausalLM, tokenizer: AutoTokenizer, use_cache = True):
         self.model = model
         self.tokenizer = tokenizer
         stop_string = "\n"
@@ -50,6 +51,7 @@ class Stepper:
             output_scores=True,
             # eos_token_id=self.stop_token_ids,
             stop_strings=stop_string,
+            use_cache=use_cache,
         )
         # NOTE: On the difference between `scores` and `logits`,
         # see https://huggingface.co/docs/transformers/v4.51.3/en/internal/generation_utils#transformers.generation.GenerateDecoderOnlyOutput
@@ -60,7 +62,7 @@ class Stepper:
     def first_step_in_one(self, prompt: str, index: Optional[int] = None, question: Optional[str] = None) -> Chain:
         input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(DEVICE) # type: ignore
         prompt_offset = input_ids.shape[1]
-        pkv = prepare_pkv(self.model, prompt_offset)
+        pkv = prepare_pkv(self.model, prompt_offset) if self.gen_config.use_cache else None
         out = self.model.generate(input_ids, # type: ignore
                                   past_key_values=pkv,
                                   generation_config=self.gen_config,
@@ -90,8 +92,12 @@ class Stepper:
 
     def next_step_in_one(self, chain: Chain) -> Chain:
         input_token_ids = chain.token_ids
+        if self.gen_config.use_cache:
+            pkv = chain.pkv or prepare_pkv(self.model, input_token_ids.shape[1], max_steps=MAX_STEPS-chain.n_lines)
+        else:
+            pkv = None
         out = self.model.generate(input_token_ids, # type: ignore
-                                  past_key_values=chain.pkv,
+                                  past_key_values=pkv,
                                   generation_config=self.gen_config,
                                   tokenizer=self.tokenizer,
                                   cache_implementation=None,
@@ -113,3 +119,5 @@ class Stepper:
             to_decode = chain.token_ids[0, offset:]
             text = self.tokenizer.decode(to_decode) # type: ignore
         debug_panel(logger, f"{chain.short_repr}", text)
+
+

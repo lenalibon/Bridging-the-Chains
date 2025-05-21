@@ -59,9 +59,11 @@ class Chain:
         # NOTE: this may be more expensive than v0, but more robust to hallucinations in which the model breaks the JSON format
         lines = self.get_generated_text().split('\n')
         # We know that the last line of split must be empty, because we are using a stop string \n
-        assert lines[-1] == '' # TODO handle failure gracefully
+        debug_panel(logger, "Generated lines", repr(self.get_generated_lines()))
+        # assert lines[-1] == '' # TODO handle failure gracefully
         # logger.debug(f"{lines=}")
-        last_line = lines[-2]
+        index = -2 if lines[-1] == '' else -1
+        last_line = lines[index]
         logger.debug(f"{self.short_repr} ends with line: {repr(last_line)}")
         pattern = r"^\s*\".*\",?\s*$" # Quoted line, with an optional comma at the end
         is_complete = re.fullmatch(pattern, last_line) is None
