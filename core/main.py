@@ -35,7 +35,7 @@ IdCluster = list[int] # list of chain ids
 DataGetter = Callable[[], tuple['Dataset', str]] # function that returns a dataset and its label
 
 
-DEVICE = "gpu" if torch.cuda.is_available() else "cpu"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 TEMPERATURE = 0.7
 
 MAX_STEPS = 8
