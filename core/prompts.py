@@ -43,6 +43,7 @@ ${solutions}
   "cot_steps": [
 ''')
 
+SUMMARIZING_PROMPT_TEMPLATE = SUMMARIZING_PROMPT_TEMPLATE_v1
 
 
 

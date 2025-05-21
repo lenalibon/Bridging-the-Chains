@@ -40,6 +40,8 @@ TEMPERATURE = 0.7
 MAX_STEPS = 8
 MAX_TOKENS_PER_STEP = 100
 
+USE_CACHE = True
+
 PREFER_JSONIC_DEBUG = False
 
 def clear_cache():
@@ -219,7 +221,7 @@ class ListChains(Chains):
  
 # ### Summary of the planned Methods
 # - [DONE] BaselineGreedy: select the answer from the single chain with the highest probability without merging or clustering.
-# - [WIP] BaselineAggregate: aggregate all answers into a single output without clustering.
+# - [DONE] BaselineAggregate: aggregate all answers into a single output without clustering.
 # - MethodMergingDuringGeneration: 
 #   - MethodMergingRepresentatives:
 #     - MethodMergingRepresentativesMaxProb
@@ -255,7 +257,7 @@ class Method:
         self.merge_after = merge_after
         # The label is used in the filename with the method results
         self.label = label or self.__class__.__name__
-        self.stepper = Stepper(model, tokenizer)
+        self.stepper = Stepper(model, tokenizer, use_cache=USE_CACHE)
 
         # WARNING: possibly not all tokenizers tokenize newlines the "right way": tokens for `\n`, `\n\n`, `\n\n\n`, etc.
         # self.stop_token_ids = [tokenizer.convert_tokens_to_ids('\n'), tokenizer.eos_token_id]
@@ -351,9 +353,10 @@ class Stepper:
 
     def next_step_in_one(self, chain: Chain) -> Chain:
         input_token_ids = chain.token_ids
-        pkv = chain.pkv if chain.pkv else prepare_pkv(self.model, input_token_ids.shape[1],
-                                                      max_steps=MAX_STEPS-chain.n_lines)
-        pkv = pkv if self.gen_config.use_cache else None
+        if self.gen_config.use_cache:
+            pkv = chain.pkv or prepare_pkv(self.model, input_token_ids.shape[1], max_steps=MAX_STEPS-chain.n_lines)
+        else:
+            pkv = None
         out = self.model.generate(input_token_ids, # type: ignore
                                   past_key_values=chain.pkv,
                                   generation_config=self.gen_config,
@@ -418,7 +421,7 @@ class SummarizingMergeFunction(MergeFunction):
         question = chain_list[0].question
         prompt = SIMPLE_PROMPT_TEMPLATE.substitute(question=question)
         new_prompt = prompt + '\n'.join(sum_chain.get_generated_lines())
-        debug_panel("New prompt", new_prompt)
+        debug_panel("New merged prompt", new_prompt)
         token_ids = self.tokenizer(new_prompt, return_tensors="pt").input_ids.to(DEVICE) # type: ignore
         prompt_offset = token_len(self.tokenizer, prompt)
         new_chain = Chain(self.tokenizer, 
