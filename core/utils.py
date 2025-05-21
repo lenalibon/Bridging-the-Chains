@@ -2,6 +2,7 @@ from datetime import datetime
 from functools import cache
 import itertools
 import json
+import logging
 from typing import Iterable
 
 from torch import Tensor
@@ -10,6 +11,15 @@ import torch
 from rich.panel import Panel
 from rich.text import Text
 from rich.console import Console
+
+from rich.logging import RichHandler
+
+
+
+
+
+from .utils import *
+from .prompts import *
 
 
 @cache
@@ -88,3 +98,22 @@ def textify(panel: Panel) -> Text:
 def hash_tensor(tensor: torch.Tensor) -> int:
     tensor = tensor.detach().cpu().contiguous()
     return hash(tensor.numpy().tobytes())
+
+def debug_panel(logger, title, text):
+    panel = Panel(text, title=title)
+    logger.debug(f"\n{textify(panel)}")
+
+def get_logger():
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(message)s",
+        handlers=[RichHandler()]
+    )
+    logger = logging.getLogger("rich")
+
+    logger.setLevel(logging.DEBUG)
+    logger.debug("logger initialized!")
+    return logger
+
+def set_seed(seed: int):
+    torch.manual_seed(42)
