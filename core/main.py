@@ -1,3 +1,4 @@
+import argparse
 from functools import partial
 from pathlib import Path
 
@@ -12,17 +13,13 @@ from transformers import (  # type: ignore
 )
 
 from core.chain import Chains
-from core.constants import DEVICE, MAX_STEPS, MAX_TOKENS_PER_STEP, DataGetter
-from core.method import BaselineAggregation, BaselineGreedy, BaselineSimple, EmbeddingMethodTest
-from core.prompter import DiversifiedAutoCoTPrompter, SimplePrompter
-from core.utils import get_logger, get_timestamp, write_jsonl
-
+from core.constants import DEVICE, DataGetter
+from core.method import BaselineSimple
+from core.prompter import DiversifiedAutoCoTPrompter
 
 import gc
 
 from .utils import *
-from .prompts import *
-from prompting.create_prompts_cot import build_prompt
 
 logger = get_logger()
 
@@ -108,4 +105,12 @@ class Experiment:
 
 # Usage: python -m core.main
 if __name__ == "__main__":
-    fire.Fire(Experiment(n_shots=4).eval)
+    parser = argparse.ArgumentParser(description="Run experiment.")
+    parser.add_argument("--n_chains", type=int, default=8, help="Number of chains to start with.")
+    parser.add_argument("--n_shots", type=int, default=5, help="Number of few-shot examples.")
+    parser.add_argument("--folder_path", type=str, default="auto-cot/gsm8k_few_shot/", help="Path to already generated few-shot examples.")
+
+    args = parser.parse_args()
+
+    exp = Experiment(n_chains_start=args.n_chains, n_shots=args.n_shots, folder_path=args.folder_path)
+    fire.Fire(exp.eval)

@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
+from transformers import GenerationConfig
 
 from core.chain import Chain, ListChains
 from core.constants import DEVICE, MAX_STEPS, MAX_TOKENS_PER_STEP, PREFER_JSONIC_DEBUG, TEMPERATURE # type: ignore
@@ -12,9 +12,8 @@ from transformers import (  # type: ignore
     HybridCache,
 )
 
-
+from .prompter import Prompter
 from .utils import *
-from .prompts import *
 
 logger = get_logger()
 
@@ -56,10 +55,16 @@ class Stepper:
         # NOTE: On the difference between `scores` and `logits`,
         # see https://huggingface.co/docs/transformers/v4.51.3/en/internal/generation_utils#transformers.generation.GenerateDecoderOnlyOutput
 
-    def first_step_in_all(self, prompt: str, n = 1, **kw) -> ListChains:
-        return ListChains.from_list([self.first_step_in_one(prompt, index=index, **kw) for index in range(n)])
+    def first_step_in_all(self, prompter: 'Prompter', n = 1, **kw) -> ListChains:
+        return ListChains.from_list([self.first_step_in_one(prompter, index=index, **kw) for index in range(n)])
 
-    def first_step_in_one(self, prompt: str, index: Optional[int] = None, question: Optional[str] = None) -> Chain:
+    def first_step_in_one(self, prompter: 'Prompter', index: Optional[int] = None, question: Optional[str] = None) -> Chain:
+        if index is not None:
+            prompt: str = prompter(question, index)
+        else:
+            prompt: str = prompter(question)
+        debug_panel(logger, "Prompt", prompt)
+
         input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(DEVICE) # type: ignore
         prompt_offset = input_ids.shape[1]
         pkv = prepare_pkv(self.model, prompt_offset) if self.gen_config.use_cache else None
