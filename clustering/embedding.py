@@ -45,7 +45,7 @@ class EmbeddingCluster(Clusterer):
         self.centroids = [None for _ in range(k)]
         for i, cluster in enumerate(labels):
             km_clusters[cluster].append(i)
-            self.centroids[cluster] = torch.from_numpy(kmeans.cluster_centers_[i])
+        self.centroids = [torch.from_numpy(center) for center in kmeans.cluster_centers_]
         # logger.info(f"Centroids have shape {self.centroids.shape}")
         logger.info(self.centroids)
         return km_clusters
