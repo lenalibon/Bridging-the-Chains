@@ -8,7 +8,7 @@ from clustering.embedding import EmbeddingCluster
 from core.chain import Chains, ListChains
 from core.clusterer import Clusterer, TrivialClusterer
 from core.experiment_config import ExperimentConfig
-from core.merger import Merger, MergerMaxProb, SummarizingMergeFunction, TrivialMergeFunction
+from core.merger import Merger, MergerClusterCentroid, MergerMaxProb, SummarizingMergeFunction, TrivialMergeFunction
 from core.prompter import Prompter
 from core.stepper import Stepper # type: ignore
 
@@ -118,8 +118,9 @@ class EmbeddingMethodTest(Method):
     """Dummy method for verifying that embedding clustering works"""
     def __init__(self, model, tokenizer, prompter, config, **kwargs): 
         # TODO: use a more powerful model for summarizing, maybe with an API call
+        clusterer = EmbeddingCluster()
         super().__init__(model, tokenizer, prompter, config,
-                         clusterer=EmbeddingCluster(),
-                         merger=MergerMaxProb(SummarizingMergeFunction(model, tokenizer, config)),
-                         post_merger=MergerMaxProb(SummarizingMergeFunction(model, tokenizer, config)),
+                         clusterer=clusterer,
+                         merger=MergerClusterCentroid(SummarizingMergeFunction(model, tokenizer, config), clusterer),
+                         post_merger=MergerClusterCentroid(SummarizingMergeFunction(model, tokenizer, config), clusterer),
                          **kwargs)
