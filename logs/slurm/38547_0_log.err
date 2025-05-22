@@ -1,0 +1,7 @@
+`generation_config` default values have been modified to match model-specific defaults: {'cache_implementation': 'hybrid', 'top_k': 64, 'top_p': 0.95, 'pad_token_id': 0, 'bos_token_id': 2, 'eos_token_id': [1, 106]}. If this is not desired, please set these values explicitly.
+[1m[31mERROR: [0mCould not consume arg: /home/vzarzu/Bridging-the-Chains/logs/slurm
+Usage: _submit.py -
+
+For detailed information on this command, run:
+  _submit.py - --help
+srun: error: studgpu-node17: task 0: Exited with exit code 2

@@ -1,0 +1,2 @@
+submitit INFO (2025-05-22 19:03:00,538) - Starting with JobEnvironment(job_id=38546, hostname=studgpu-node01.inf.ethz.ch, local_rank=0(1), node=0(1), global_rank=0(1))
+submitit INFO (2025-05-22 19:03:00,539) - Loading pickle: /home/vzarzu/Bridging-the-Chains/logs/slurm/38546_submitted.pkl

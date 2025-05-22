@@ -1,0 +1,1 @@
+/home/vzarzu/Bridging-the-Chains/logs/slurm/38531_submission.sh
