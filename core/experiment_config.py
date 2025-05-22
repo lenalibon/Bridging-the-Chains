@@ -22,10 +22,10 @@ class ExperimentConfig(TypedDict):
     device: str
 
 experiment_config_data = {
-    "methods": ['greedy', 'aggregation'], #['greedy', 'aggregation', 'simple']
-    "prompter": 'simple', #['simple', 'diversified_auto_cot']
+    "methods": ['greedy'], #['greedy', 'aggregation', 'simple']
+    "prompter": 'diversified_auto_cot', #['simple', 'diversified_auto_cot']
     "n_init_chains": [4, 8],
-    "num_samples_eval": 1024,
+    "num_samples_eval": 1,
     "max_steps": 8,
     "max_tokens_per_step": 100,
     "num_few_shots": 8,

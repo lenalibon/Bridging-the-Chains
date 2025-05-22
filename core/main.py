@@ -2,7 +2,7 @@ import argparse
 from functools import partial
 from pathlib import Path
 
-from core.method import BaselineAggregation, BaselineGreedy, BaselineSimple
+from core.method import BaselineAggregation, BaselineGreedy, BaselineSimple, EmbeddingMethodTest
 from core.prompter import DiversifiedAutoCoTPrompter, SimplePrompter
 import datasets
 import fire
@@ -15,7 +15,7 @@ from transformers import (  # type: ignore
 )
 
 from core.chain import Chains
-from core.constants import DEVICE, DataGetter
+from core.constants import DataGetter
 from core.method import BaselineSimple
 from core.prompter import DiversifiedAutoCoTPrompter
 from core.constants import DataGetter
@@ -39,7 +39,7 @@ clear_cache()
 set_seed(42)
 
 method_mappings = {
-    'greedy': BaselineGreedy,
+    'greedy': EmbeddingMethodTest,
     'aggregation': BaselineAggregation,
     'simple': BaselineSimple
 }

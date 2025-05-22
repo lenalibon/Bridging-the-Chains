@@ -65,10 +65,27 @@ class Stepper:
             prompt: str = prompter(question, index)
         else:
             prompt: str = prompter(question)
-        debug_panel(logger, "Prompt", prompt)
+        input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.config.device) # type: ignore
+        prompt_offset = input_ids.shape[1]
+        pkv = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step) if self.gen_config.use_cache else None
+        out = self.model.generate(input_ids, # type: ignore
+                                  past_key_values=pkv,
+                                  generation_config=self.gen_config,
+                                  tokenizer=self.tokenizer,
+                                  cache_implementation=None
+                                  )
+        chain = Chain(self.tokenizer,
+                      out.sequences,
+                      prompt_offset=prompt_offset,
+                      scores=out.scores,
+                      pkv=out.past_key_values,
+                      index=index,
+                      n_lines=1,
+                      question=question)
+        self.debug_chain(chain, skip_offset=True)
+        return chain
 
-
-    def first_step_in_one(self, prompt: str, index: Optional[int] = None, question: Optional[str] = None) -> Chain:
+    def first_step_in_one_summarization(self, prompt: str, index: Optional[int] = None, question: Optional[str] = None) -> Chain:
         input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.config.device) # type: ignore
         prompt_offset = input_ids.shape[1]
         pkv = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step) if self.gen_config.use_cache else None
