@@ -1,8 +1,7 @@
 from typing import Optional
 
-import numpy as np
 import torch
-from transformers import AutoModel, AutoTokenizer, AutoModelForSequenceClassification, AutoModelForCausalLM, \
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModelForCausalLM, \
     StoppingCriteria, StoppingCriteriaList
 
 from core.chain import ListChains
@@ -35,6 +34,7 @@ class EntailmentCluster(Clusterer):
         model_name = "google/gemma-3-1b-it"
         self.tokenizer_generate = AutoTokenizer.from_pretrained(model_name, padding_side='left')
         self.model_generate = AutoModelForCausalLM.from_pretrained(model_name).to(DEVICE)
+        self.model_generate.eval()
 
     def generate_intermediate_answer(self, question: str, cot_steps: list[str]) -> str:
         filled_prompt = INTERMEDIATE_ANSWER_PROMPT_TEMPLATE.format(
@@ -44,7 +44,8 @@ class EntailmentCluster(Clusterer):
 
         stop_criteria = StoppingCriteriaList([StopAfterIntermediateAnswer(self.tokenizer_generate)])
         tokenized = self.tokenizer_generate(filled_prompt, return_tensors="pt").to(DEVICE)
-        output_tokenized = self.model_generate.generate(**tokenized, max_new_tokens=200, do_sample=True,
+        with torch.no_grad():
+            output_tokenized = self.model_generate.generate(**tokenized, max_new_tokens=200, do_sample=True,
                                                         stopping_criteria=stop_criteria)
         output = self.tokenizer_generate.decode(output_tokenized[0])
 
@@ -57,20 +58,46 @@ class EntailmentCluster(Clusterer):
         assert question is not None, "Question must be provided for entailment clustering"
 
         # 1. Generate the intermediate answer for each chain
-        intermediate_answers = list()
+        intermediate_answers = []
         for chain in chains:
             cot_steps: list[str] = chain.get_generated_steps()
             intermediate_answer = self.generate_intermediate_answer(question, cot_steps)
             intermediate_answers.append(intermediate_answer)
 
-        # 1. Compute the embeddings for each chain
-        chain_embeddings = list()
-        for chain in chains:
-            cot_steps: list[str] = chain.get_generated_steps()
-            thought_embeddings = list()
-            for thought in cot_steps:
-                thought_embedding = self.compute_embedding(question, thought)
-                thought_embeddings.append(thought_embedding)
+        # 2. Cluster by entailment
+        # Following the approach by Kuhn et al. (2023), we don't compute all possible entailment pairs
+        clusters = []
+        for i in range(len(intermediate_answers)):
+            found = False
+            for j in range(len(clusters)):
+                if self.compute_entailment(intermediate_answers[i], intermediate_answers[clusters[j][0]], question):
+                    clusters[j].append(i)
+                    found = True
+                    break
 
-        clusters = None
+            if not found:
+                clusters.append([i])
         return clusters
+
+    def compute_entailment(self, answer1, answer2, question):
+        # Bidirectional entailment
+        premise = f"Question: {question} Answer: {answer1}"
+        hypothesis = f"Question: {question} Answer: {answer2}"
+        inputs = self.nli_tokenizer(premise, hypothesis, return_tensors="pt", padding=True).to(DEVICE)
+        with torch.no_grad():
+            outputs = self.nli_model(**inputs)
+        logits = outputs.logits
+        probs = torch.softmax(logits, dim=-1)[0]
+        # 0: contradiction, 1: entailment, 2: neutral
+        idx = probs.argmax().item()
+        if idx != 1:
+            return False
+
+        inputs = self.nli_tokenizer(hypothesis, premise, return_tensors="pt", padding=True).to(DEVICE)
+        with torch.no_grad():
+            outputs = self.nli_model(**inputs)
+        logits = outputs.logits
+        probs = torch.softmax(logits, dim=-1)[0]
+        idx = probs.argmax().item()
+        return idx == 1
+
