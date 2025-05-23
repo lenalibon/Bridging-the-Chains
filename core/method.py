@@ -112,7 +112,7 @@ class BaselineAggregation(Method):
 class BaselineSimple(Method):
     "No branching, no clustering, no merging"
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
-        super().__init__(model, tokenizer, prompter, config **kwargs)
+        super().__init__(model, tokenizer, prompter, config, **kwargs)
 
 class EmbeddingMethodTest(Method):
     """Dummy method for verifying that embedding clustering works"""
