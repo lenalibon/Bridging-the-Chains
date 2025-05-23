@@ -2,9 +2,11 @@
 
 from typing import Optional
 
+from torch.nn import Embedding
 from torch.nn.functional import cosine_similarity
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
+from clustering.embedding import EmbeddingCluster
 from core.chain import Chain, Chains, ListChains
 from core.clusterer import Clusterer
 from core.constants import *
@@ -104,6 +106,7 @@ class MergerMaxProb(Merger):
 class MergerClusterCentroid(Merger):
     def __init__(self, merge_fn: Optional[MergeFunction], clusterer: Clusterer):
         super().__init__(merge_fn)
+        assert isinstance(clusterer, EmbeddingCluster), "MergerClusterCentroid only works with EmbeddingCluster"
         self.clusterer = clusterer
 
     def __call__(self, chains: Chains, chain_id_clusters: list[IdCluster]) -> Chains:
