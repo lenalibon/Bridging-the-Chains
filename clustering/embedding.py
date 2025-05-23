@@ -71,7 +71,7 @@ class EmbeddingCluster(Clusterer):
             chain_embedding = torch.stack(thought_embeddings, dim=0).mean(dim=0)
             chain_embeddings.append(chain_embedding)
 
-        self.embeddings = chain_embeddings # TODO: rename
+        self.embeddings = chain_embeddings
 
         # 2. Cluster the embeddings
         clusters = self._kmeans(chain_embeddings)
