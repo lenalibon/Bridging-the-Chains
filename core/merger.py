@@ -2,9 +2,12 @@
 
 from typing import Optional
 
+from torch.nn.functional import cosine_similarity
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
+from clustering.embedding import EmbeddingCluster
 from core.chain import Chain, Chains, ListChains
+from core.clusterer import Clusterer
 from core.constants import *
 from core.stepper import Stepper # type: ignore
 
@@ -100,13 +103,32 @@ class MergerMaxProb(Merger):
 
 
 class MergerClusterCentroid(Merger):
-    def __call__(self, chains: Chains, chain_id_clusters: list[IdCluster]) -> Chains:
-        # TODO persist and pass cluster centroids from similarity clusterer?
-        assert self.merge_fn
-        return self.merge_fn([ self.get_closest_to_cluster_centroids(chains, cluster) for cluster in chain_id_clusters ]).as_chains()
+    def __init__(self, merge_fn: Optional[MergeFunction], clusterer: Clusterer):
+        super().__init__(merge_fn)
+        assert isinstance(clusterer, EmbeddingCluster), "MergerClusterCentroid only works with EmbeddingCluster"
+        self.clusterer = clusterer
 
-    def get_closest_to_cluster_centroids(self, chains: Chains, id_cluster: IdCluster) -> Chain:
-        raise NotImplementedError("TODO")
+    def __call__(self, chains: Chains, chain_id_clusters: list[IdCluster]) -> Chains:
+        assert self.merge_fn
+        return self.merge_fn([ self.get_closest_to_cluster_centroids(chains, cluster, cluster_index) for cluster_index, cluster in enumerate(chain_id_clusters) ]).as_chains()
+
+    def get_closest_to_cluster_centroids(self, chains: Chains, id_cluster: IdCluster, cluster_index: int) -> Chain:
+        """
+        For each cluster of chains, find the chain which is closest to the centroid
+        """
+        # 1. Compute cosine similarities for each chain
+        centroid = self.clusterer.get_centroids()[cluster_index]
+        closest_chain, max_cos_distance = None, -float('inf')
+        for chain_id in id_cluster:
+            chain = chains[chain_id]
+            chain_embedding = self.clusterer.get_embeddings()[chain_id]
+            cos_distance = cosine_similarity(chain_embedding, centroid, dim=0)
+            if closest_chain is None or cos_distance > max_cos_distance:
+                closest_chain = chain
+                max_cos_distance = cos_distance
+        
+        return closest_chain
+        
 
 
 class MergerWithinCluster(Merger):

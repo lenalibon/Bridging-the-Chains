@@ -7,7 +7,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from clustering.embedding import EmbeddingCluster
 from core.chain import Chains, ListChains
 from core.clusterer import Clusterer, TrivialClusterer
-from core.merger import Merger, MergerMaxProb, SummarizingMergeFunction, TrivialMergeFunction
+from core.merger import Merger, MergerClusterCentroid, MergerMaxProb, SummarizingMergeFunction, TrivialMergeFunction
 from core.prompter import Prompter
 from core.stepper import Stepper # type: ignore
 
@@ -119,9 +119,10 @@ class EmbeddingMethodTest(Method):
     """Dummy method for verifying that embedding clustering works"""
     def __init__(self, model, tokenizer, prompter, **kwargs): 
         # TODO: use a more powerful model for summarizing, maybe with an API call
+        clusterer = EmbeddingCluster()
         super().__init__(model, tokenizer, prompter,
                          merge_after=True,
-                         clusterer=EmbeddingCluster(),
-                         merger=MergerMaxProb(SummarizingMergeFunction(model, tokenizer)),
-                         post_merger=MergerMaxProb(SummarizingMergeFunction(model, tokenizer)),
+                         clusterer=clusterer,
+                         merger=MergerClusterCentroid(SummarizingMergeFunction(model, tokenizer), clusterer),
+                         post_merger=MergerClusterCentroid(SummarizingMergeFunction(model, tokenizer), clusterer),
                          **kwargs)
