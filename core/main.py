@@ -58,7 +58,7 @@ class Experiment:
         # NOTE: A DataGetter is a function that returns a tuple with dataset and its label.
         # We might want to consider a wrapper class around datasets.Dataset instead.
         data_getters: list[DataGetter] = [partial(self.get_gsm8k, n=self.config.num_samples_eval)] # FIXME delete n=
-        model, tokenizer = self.config.model, self.config.tokenizer
+        model, tokenizer = self.get_model_and_tokenizer()
         prompter = prompter_mappings[self.config.prompter](folder_path = self.config.few_shots_folder_path, n_shots = self.config.num_few_shots) # FIXME: TODO use autocot
         methods = [
             method_mappings[method](model, tokenizer, prompter, self.config,
@@ -100,13 +100,24 @@ class Experiment:
             label = f"{self.config.dataset}-first{n}"
         return (split, label) # type: ignore
 
+    def get_model_and_tokenizer(self):
+        model_name = "google/gemma-3-1b-it"
+        # model_name = "Qwen/Qwen2.5-0.5B-Instruct"
+        tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
+        # model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=BitsAndBytesConfig(load_in_8bit=True))
+        model = AutoModelForCausalLM.from_pretrained(model_name).to(self.config.device)
+        return model, tokenizer
+
+
 
 
 
 # Usage: python -m core.main
-#if __name__ == "__main__":
-#    parser = argparse.ArgumentParser(description="Run experiment.")
-#    args = parser.parse_args()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run experiment.")
+    parser.add_argument("--n_chains", type=int, default=5, help="Number of chains to start with.")
+    parser.add_argument("--n_shots", type=int, default=8, help="Number of few-shot examples.")
+    parser.add_argument("--folder_path", type=str, default="few-shot/gsm8k_few_shot/", help="Path to already generated few-shot examples.")
 
-#    exp = Experiment(experiment_config)
-#    fire.Fire(exp.eval)
+    exp = Experiment(experiment_config)
+    fire.Fire(exp.eval)

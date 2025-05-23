@@ -75,7 +75,7 @@ class Method:
             if self.merge_every and counter % self.merge_every == 0:
                 assert self.clusterer
                 assert self.merger
-                chain_id_clusters = self.clusterer(chains)
+                chain_id_clusters = self.clusterer(chains, question)
                 chains = self.merger(chains, chain_id_clusters) # type: ignore
             chains = self.stepper.next_step_in_all(chains)
             counter += 1
@@ -83,7 +83,7 @@ class Method:
         if self.merge_after:
             assert self.post_merger
             assert self.clusterer
-            chain_id_clusters = self.clusterer(chains)
+            chain_id_clusters = self.clusterer(chains, question)
             chains = self.post_merger(chains, chain_id_clusters) # type: ignore
 
         return chains

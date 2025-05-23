@@ -5,6 +5,7 @@ from typing import Optional
 from torch.nn.functional import cosine_similarity
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
+from clustering.embedding import EmbeddingCluster
 from core.chain import Chain, Chains, ListChains
 from core.clusterer import Clusterer
 from core.constants import *
@@ -106,6 +107,7 @@ class MergerMaxProb(Merger):
 class MergerClusterCentroid(Merger):
     def __init__(self, merge_fn: Optional[MergeFunction], clusterer: Clusterer):
         super().__init__(merge_fn)
+        assert isinstance(clusterer, EmbeddingCluster), "MergerClusterCentroid only works with EmbeddingCluster"
         self.clusterer = clusterer
 
     def __call__(self, chains: Chains, chain_id_clusters: list[IdCluster]) -> Chains:
@@ -118,7 +120,7 @@ class MergerClusterCentroid(Merger):
         """
         # 1. Compute cosine similarities for each chain
         centroid = self.clusterer.get_centroids()[cluster_index]
-        closest_chain, max_cos_distance = None, float('inf')
+        closest_chain, max_cos_distance = None, -float('inf')
         for chain_id in id_cluster:
             chain = chains[chain_id]
             chain_embedding = self.clusterer.get_embeddings()[chain_id]

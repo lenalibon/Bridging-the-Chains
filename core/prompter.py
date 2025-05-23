@@ -14,13 +14,13 @@ class SimplePrompter(Prompter):
     def __call__(self, question):
         return self.template.substitute(question=question)
     
-class DiversifiedAutoCoTPrompter(Prompter):
+class DiversifiedCoTPrompter(Prompter):
     """
     Returns one few-shot prompt per chain index, with diversified expert.
     """
     def __init__(self,
                  template: Template = None,
-                 folder_path: str = "auto-cot/gsm8k_few_shot/",
+                 folder_path: str = "few-shot/gsm8k_few_shot/",
                  n_shots: int = 8):
         self.template = template
         self.folder_path = folder_path
