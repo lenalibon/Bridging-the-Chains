@@ -3,7 +3,7 @@ from functools import partial
 from pathlib import Path
 
 from core.method import BaselineAggregation, BaselineGreedy, BaselineSimple, EmbeddingMethodTest
-from core.prompter import DiversifiedAutoCoTPrompter, SimplePrompter
+from core.prompter import DiversifiedCoTPrompter, SimplePrompter
 import datasets
 import fire
 from datasets import Dataset
@@ -17,7 +17,6 @@ from transformers import (  # type: ignore
 from core.chain import Chains
 from core.constants import DataGetter
 from core.method import BaselineSimple
-from core.prompter import DiversifiedAutoCoTPrompter
 from core.constants import DataGetter
 from core.utils import get_logger, get_timestamp, write_jsonl
 from core.experiment_config import experiment_config, ExperimentConfig
@@ -46,7 +45,7 @@ method_mappings = {
 
 prompter_mappings = {
     'simple': SimplePrompter,
-    'diversified_auto_cot': DiversifiedAutoCoTPrompter
+    'diversified_cot': DiversifiedCoTPrompter
 }
 
 class Experiment:
@@ -60,6 +59,11 @@ class Experiment:
         data_getters: list[DataGetter] = [partial(self.get_gsm8k, n=self.config.num_samples_eval)] # FIXME delete n=
         model, tokenizer = self.get_model_and_tokenizer()
         prompter = prompter_mappings[self.config.prompter](folder_path = self.config.few_shots_folder_path, n_shots = self.config.num_few_shots) # FIXME: TODO use autocot
+        if len(self.config.methods) != len(self.config.n_init_chains):
+            if len(self.config.methods) == 1:
+                self.config.methods = [self.config.methods[0] for _ in range(len(self.config.n_init_chains))]
+            else:
+                raise ValueError("Number of methods and number of initial chains must be the same.")
         methods = [
             method_mappings[method](model, tokenizer, prompter, self.config,
                    label=method.__class__.__name__, n_init_chains = n_init_chains)

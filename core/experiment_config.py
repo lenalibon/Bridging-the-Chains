@@ -23,7 +23,7 @@ class ExperimentConfig(TypedDict):
 
 experiment_config_data = {
     "methods": ['greedy'], #['greedy', 'aggregation', 'simple']
-    "prompter": 'diversified_auto_cot', #['simple', 'diversified_auto_cot']
+    "prompter": 'diversified_cot', #['simple', 'diversified_cot']
     "n_init_chains": [4, 8],
     "num_samples_eval": 1000,
     "max_steps": 8,
