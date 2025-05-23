@@ -2,7 +2,6 @@
 
 from typing import Optional
 
-from torch.nn import Embedding
 from torch.nn.functional import cosine_similarity
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
