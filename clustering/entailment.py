@@ -7,9 +7,8 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification, Auto
 from core.chain import ListChains
 from core.clusterer import Clusterer
 from core.constants import IdCluster
+from core.experiment_config import ExperimentConfig
 from prompting.prompts import INTERMEDIATE_ANSWER_PROMPT_TEMPLATE
-
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 class StopAfterIntermediateAnswer(StoppingCriteria):
@@ -23,17 +22,17 @@ class StopAfterIntermediateAnswer(StoppingCriteria):
 
 class EntailmentCluster(Clusterer):
 
-    def __init__(self):
+    def __init__(self, config: ExperimentConfig):
         # NLI model for entailment
         nli_model_name = "cross-encoder/nli-deberta-v3-large"
         self.nli_tokenizer = AutoTokenizer.from_pretrained(nli_model_name)
-        self.nli_model = AutoModelForSequenceClassification.from_pretrained(nli_model_name).to(DEVICE)
+        self.nli_model = AutoModelForSequenceClassification.from_pretrained(nli_model_name).to(config.device)
         self.nli_model.eval()
 
         # Autoregressive model to generate intermediate answers
         model_name = "google/gemma-3-1b-it"
         self.tokenizer_generate = AutoTokenizer.from_pretrained(model_name, padding_side='left')
-        self.model_generate = AutoModelForCausalLM.from_pretrained(model_name).to(DEVICE)
+        self.model_generate = AutoModelForCausalLM.from_pretrained(model_name).to(config.device)
         self.model_generate.eval()
 
     def generate_intermediate_answer(self, question: str, cot_steps: list[str]) -> str:

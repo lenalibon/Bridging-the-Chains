@@ -92,18 +92,18 @@ def hash_tensor(tensor: torch.Tensor) -> int:
 
 def debug_panel(logger, title, text):
     panel = Panel(text, title=title)
-    logger.debug(f"\n{textify(panel)}")
+    #logger.debug(f"\n{textify(panel)}")
 
 def get_logger():
     logging.basicConfig(
-        level=logging.WARNING,
+        level=logging.CRITICAL,
         format="%(message)s",
         handlers=[RichHandler()]
     )
     logger = logging.getLogger("rich")
 
-    logger.setLevel(logging.DEBUG)
-    logger.debug("logger initialized!")
+    logger.setLevel(logging.CRITICAL + 1)
+    #logger.debug("logger initialized!")
     return logger
 
 def set_seed(seed: int):
