@@ -36,9 +36,9 @@ experiment_config_data = {
 
     "dataset": "gsm8k",
     "model_name": "google/gemma-3-1b-it",
-    "few_shots_folder_path": "auto-cot/gsm8k_few_shot/",
+    "few_shots_folder_path": "few-shot/gsm8k_few_shot/",
     "use_cache": True,
-    "device": "cuda"
+    "device": "cpu"
 }
 
 experiment_config: ExperimentConfig = Munch.fromDict(experiment_config_data)

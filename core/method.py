@@ -96,7 +96,7 @@ class BaselineGreedy(Method):
         # 1. "merging" happens after generation,
         # 2. and "merging" is really just selecting the highest-probability chain.
         super().__init__(model, tokenizer, prompter, config,
-                         clusterer=TrivialClusterer(),
+                         clusterer=TrivialClusterer(config),
                          post_merger=MergerMaxProb(TrivialMergeFunction()),
                          **kwargs)
 
@@ -104,7 +104,7 @@ class BaselineAggregation(Method):
     """Aggregation Approach: Aggregating all answers into a single output without clustering."""
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         super().__init__(model, tokenizer, prompter, config,
-                         clusterer=TrivialClusterer(),
+                         clusterer=TrivialClusterer(config),
                          post_merger=Merger(SummarizingMergeFunction(model, tokenizer, config)),
                          **kwargs)
 
@@ -118,7 +118,7 @@ class EmbeddingMethodTest(Method):
     """Dummy method for verifying that embedding clustering works"""
     def __init__(self, model, tokenizer, prompter, config, **kwargs): 
         # TODO: use a more powerful model for summarizing, maybe with an API call
-        clusterer = EmbeddingCluster()
+        clusterer = EmbeddingCluster(config)
         super().__init__(model, tokenizer, prompter, config,
                          clusterer=clusterer,
                          merger=MergerClusterCentroid(SummarizingMergeFunction(model, tokenizer, config), clusterer),

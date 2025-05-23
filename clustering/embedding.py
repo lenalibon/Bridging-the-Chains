@@ -7,13 +7,14 @@ from transformers import AutoModel, AutoTokenizer
 from core.chain import ListChains
 from core.clusterer import Clusterer
 from core.constants import IdCluster
+from core.experiment_config import ExperimentConfig
 from core.utils import get_logger
 
 logger = get_logger()
 
 class EmbeddingCluster(Clusterer):
 
-    def __init__(self):
+    def __init__(self, config: ExperimentConfig):
         self.tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
         self.model = AutoModel.from_pretrained("bert-base-uncased")
         self.model.eval()

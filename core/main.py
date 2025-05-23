@@ -38,7 +38,7 @@ clear_cache()
 set_seed(42)
 
 method_mappings = {
-    'greedy': EmbeddingMethodTest,
+    'greedy': BaselineGreedy,
     'aggregation': BaselineAggregation,
     'simple': BaselineSimple
 }
@@ -66,7 +66,7 @@ class Experiment:
                 raise ValueError("Number of methods and number of initial chains must be the same.")
         methods = [
             method_mappings[method](model, tokenizer, prompter, self.config,
-                   label=method.__class__.__name__, n_init_chains = n_init_chains)
+                   label=method_mappings[method].__name__, n_init_chains = n_init_chains)
             for method, n_init_chains in zip(self.config.methods, self.config.n_init_chains)
         ]
         for get_data in data_getters:
