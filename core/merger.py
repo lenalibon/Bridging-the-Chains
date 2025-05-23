@@ -118,7 +118,7 @@ class MergerClusterCentroid(Merger):
         """
         # 1. Compute cosine similarities for each chain
         centroid = self.clusterer.get_centroids()[cluster_index]
-        closest_chain, max_cos_distance = None, float('inf')
+        closest_chain, max_cos_distance = None, -float('inf')
         for chain_id in id_cluster:
             chain = chains[chain_id]
             chain_embedding = self.clusterer.get_embeddings()[chain_id]
