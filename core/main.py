@@ -15,7 +15,7 @@ from transformers import (  # type: ignore
 from core.chain import Chains
 from core.constants import DEVICE, DataGetter
 from core.method import BaselineSimple
-from core.prompter import DiversifiedAutoCoTPrompter
+from core.prompter import DiversifiedCoTPrompter
 
 import gc
 
@@ -40,7 +40,7 @@ set_seed(42)
 
 
 class Experiment:
-    def __init__(self, n_chains_start: int = 8, n_shots: int = 8, folder_path: str = "auto-cot/gsm8k_few_shot/"):
+    def __init__(self, n_chains_start: int = 5, n_shots: int = 8, folder_path: str = "few-shot/gsm8k_few_shot/"):
         self.n_chains = n_chains_start
         self.n_shots = n_shots
         self.folder_path = folder_path
@@ -51,7 +51,7 @@ class Experiment:
         # We might want to consider a wrapper class around datasets.Dataset instead.
         data_getters: list[DataGetter] = [partial(self.get_gsm8k, n=1)] # FIXME delete n=
         model, tokenizer = self.get_model_and_tokenizer()
-        prompter = DiversifiedAutoCoTPrompter(folder_path=self.folder_path, n_shots=self.n_shots)
+        prompter = DiversifiedCoTPrompter(folder_path=self.folder_path, n_shots=self.n_shots)
         #prompter = SimplePrompter(template=SIMPLE_PROMPT_TEMPLATE)
         methods = [
             # BaselineAggregation(model, tokenizer, prompter, n_init_chains=8, label="Aggregation-8")
@@ -106,9 +106,9 @@ class Experiment:
 # Usage: python -m core.main
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run experiment.")
-    parser.add_argument("--n_chains", type=int, default=8, help="Number of chains to start with.")
-    parser.add_argument("--n_shots", type=int, default=5, help="Number of few-shot examples.")
-    parser.add_argument("--folder_path", type=str, default="auto-cot/gsm8k_few_shot/", help="Path to already generated few-shot examples.")
+    parser.add_argument("--n_chains", type=int, default=5, help="Number of chains to start with.")
+    parser.add_argument("--n_shots", type=int, default=8, help="Number of few-shot examples.")
+    parser.add_argument("--folder_path", type=str, default="few-shot/gsm8k_few_shot/", help="Path to already generated few-shot examples.")
 
     args = parser.parse_args()
 
