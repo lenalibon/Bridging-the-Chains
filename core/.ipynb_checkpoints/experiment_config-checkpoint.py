@@ -25,7 +25,7 @@ experiment_config_data = {
     "methods": ['greedy'], #['greedy', 'aggregation', 'simple']
     "prompter": 'diversified_auto_cot', #['simple', 'diversified_auto_cot']
     "n_init_chains": [4, 8],
-    "num_samples_eval": 5,
+    "num_samples_eval": 1000,
     "max_steps": 8,
     "max_tokens_per_step": 100,
     "num_few_shots": 8,

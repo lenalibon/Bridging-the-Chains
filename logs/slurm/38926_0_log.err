@@ -1,0 +1,97 @@
+`generation_config` default values have been modified to match model-specific defaults: {'cache_implementation': 'hybrid', 'top_k': 64, 'top_p': 0.95, 'pad_token_id': 0, 'bos_token_id': 2, 'eos_token_id': [1, 106]}. If this is not desired, please set these values explicitly.
+submitit ERROR (2025-05-23 10:58:13,833) - Submitted job triggered an exception
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/submitit/core/_submit.py", line 11, in <module>
+    submitit_main()
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/submitit/core/submission.py", line 76, in submitit_main
+    process_job(args.folder)
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/submitit/core/submission.py", line 69, in process_job
+    raise error
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/submitit/core/submission.py", line 55, in process_job
+    result = delayed.result()
+             ^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/submitit/core/utils.py", line 137, in result
+    self._result = self.function(*self.args, **self.kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/ipykernel_550234/4176226614.py", line 9, in run_wrapper
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/fire/core.py", line 135, in Fire
+    component_trace = _Fire(component, args, parsed_flag_args, context, name)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/fire/core.py", line 468, in _Fire
+    component, remaining_args = _CallAndUpdateTrace(
+                                ^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/fire/core.py", line 684, in _CallAndUpdateTrace
+    component = fn(*varargs, **kwargs)
+                ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/Bridging-the-Chains/core/main.py", line 72, in eval
+    self.eval_method(method, eval_data, label=eval_label)
+  File "/home/vzarzu/Bridging-the-Chains/core/main.py", line 79, in eval_method
+    pred_chains: Chains = method.generate_answer(question)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/Bridging-the-Chains/core/method.py", line 72, in generate_answer
+    chains: ListChains = self.stepper.first_step_in_all(prompter = self.prompter, question=question, n=self.n_init_chains)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/Bridging-the-Chains/core/stepper.py", line 61, in first_step_in_all
+    return ListChains.from_list([self.first_step_in_one(prompter, index=index, **kw) for index in range(n)])
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/Bridging-the-Chains/core/stepper.py", line 71, in first_step_in_one
+    out = self.model.generate(input_ids, # type: ignore
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/transformers/generation/utils.py", line 2597, in generate
+    result = self._sample(
+             ^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/transformers/generation/utils.py", line 3557, in _sample
+    outputs = self(**model_inputs, return_dict=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/transformers/utils/generic.py", line 969, in wrapper
+    output = func(self, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/transformers/models/gemma3/modeling_gemma3.py", line 864, in forward
+    outputs: BaseModelOutputWithPast = self.model(
+                                       ^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/transformers/utils/generic.py", line 969, in wrapper
+    output = func(self, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/transformers/models/gemma3/modeling_gemma3.py", line 654, in forward
+    layer_outputs = decoder_layer(
+                    ^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/transformers/utils/deprecation.py", line 172, in wrapped_func
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/transformers/models/gemma3/modeling_gemma3.py", line 479, in forward
+    hidden_states = self.mlp(hidden_states)
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/transformers/models/gemma3/modeling_gemma3.py", line 159, in forward
+    down_proj = self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 54.00 MiB. GPU 0 has a total capacity of 10.90 GiB of which 29.25 MiB is free. Including non-PyTorch memory, this process has 10.87 GiB memory in use. Of the allocated memory 10.66 GiB is allocated by PyTorch, and 49.70 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+srun: error: studgpu-node09: task 0: Exited with exit code 1

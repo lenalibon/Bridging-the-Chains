@@ -1,0 +1,5 @@
+submitit INFO (2025-05-22 19:28:21,517) - Starting with JobEnvironment(job_id=38558, hostname=studgpu-node17.inf.ethz.ch, local_rank=0(1), node=0(1), global_rank=0(1))
+submitit INFO (2025-05-22 19:28:21,517) - Loading pickle: /home/vzarzu/Bridging-the-Chains/logs/slurm/38558_submitted.pkl
+submitit ERROR (2025-05-22 19:33:59,766) - Submitted job triggered an exception
+[2;36m[05/22/25 19:33:59][0m[2;36m [0m[1;31mERROR   [0m Submitted job triggered an         ]8;id=588242;file:///home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/submitit/core/submission.py\[2msubmission.py[0m]8;;\[2m:[0m]8;id=562649;file:///home/vzarzu/miniconda3/envs/csnlp/lib/python3.12/site-packages/submitit/core/submission.py#68\[2m68[0m]8;;\
+[2;36m                    [0m         exception                          [2m                [0m
