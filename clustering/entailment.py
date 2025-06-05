@@ -42,7 +42,7 @@ class EntailmentCluster(Clusterer):
         )
 
         stop_criteria = StoppingCriteriaList([StopAfterIntermediateAnswer(self.tokenizer_generate)])
-        tokenized = self.tokenizer_generate(filled_prompt, return_tensors="pt").to(DEVICE)
+        tokenized = self.tokenizer_generate(filled_prompt, return_tensors="pt").to(self.config.device)
         with torch.no_grad():
             output_tokenized = self.model_generate.generate(**tokenized, max_new_tokens=200, do_sample=True,
                                                         stopping_criteria=stop_criteria)
@@ -82,7 +82,7 @@ class EntailmentCluster(Clusterer):
         # Bidirectional entailment
         premise = f"Question: {question} Answer: {answer1}"
         hypothesis = f"Question: {question} Answer: {answer2}"
-        inputs = self.nli_tokenizer(premise, hypothesis, return_tensors="pt", padding=True).to(DEVICE)
+        inputs = self.nli_tokenizer(premise, hypothesis, return_tensors="pt", padding=True).to(self.config.device)
         with torch.no_grad():
             outputs = self.nli_model(**inputs)
         logits = outputs.logits
@@ -92,7 +92,7 @@ class EntailmentCluster(Clusterer):
         if idx != 1:
             return False
 
-        inputs = self.nli_tokenizer(hypothesis, premise, return_tensors="pt", padding=True).to(DEVICE)
+        inputs = self.nli_tokenizer(hypothesis, premise, return_tensors="pt", padding=True).to(self.config.device)
         with torch.no_grad():
             outputs = self.nli_model(**inputs)
         logits = outputs.logits

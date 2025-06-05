@@ -38,7 +38,7 @@ clear_cache()
 set_seed(42)
 
 method_mappings = {
-    'greedy': BaselineGreedy,
+    'greedy': EmbeddingMethodTest,
     'aggregation': BaselineAggregation,
     'simple': BaselineSimple
 }

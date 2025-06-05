@@ -25,7 +25,7 @@ experiment_config_data = {
     "methods": ['greedy'], #['greedy', 'aggregation', 'simple']
     "prompter": 'diversified_cot', #['simple', 'diversified_cot']
     "n_init_chains": [4, 8],
-    "num_samples_eval": 1000,
+    "num_samples_eval": 1,
     "max_steps": 8,
     "max_tokens_per_step": 100,
     "num_few_shots": 8,
@@ -38,7 +38,7 @@ experiment_config_data = {
     "model_name": "google/gemma-3-1b-it",
     "few_shots_folder_path": "few-shot/gsm8k_few_shot/",
     "use_cache": True,
-    "device": "cpu"
+    "device": "mps"
 }
 
 experiment_config: ExperimentConfig = Munch.fromDict(experiment_config_data)

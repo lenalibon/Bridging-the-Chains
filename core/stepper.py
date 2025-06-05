@@ -107,9 +107,9 @@ class Stepper:
         return chain
 
     def first_step_in_one_summarization(self, prompt: str, index: Optional[int] = None, question: Optional[str] = None) -> Chain:
-        input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(DEVICE) # type: ignore
+        input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.config.device) # type: ignore
         prompt_offset = input_ids.shape[1]
-        pkv = prepare_pkv(self.model, prompt_offset) if self.gen_config.use_cache else None
+        pkv = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step) if self.gen_config.use_cache else None
         out = self.model.generate(input_ids, # type: ignore
                                   past_key_values=pkv,
                                   generation_config=self.gen_config,
