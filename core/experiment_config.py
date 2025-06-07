@@ -2,17 +2,16 @@ from munch import Munch
 from typing import List, Type, TypedDict
 
 class ExperimentConfig(TypedDict):
-    methods: List[str]
+    experiment_id:str # as defined in Table 1 of the paper
     prompter: str 
-    n_init_chains: List[int]
+    n_init_chains: int # number of initial chains
     num_samples_eval: int
     max_steps: int
     max_tokens_per_step: int
     num_few_shots: int
     temperature: float
 
-    merge_after: bool
-    merge_every: int | bool
+    merge_every: int # number of steps after which we merge chains if we use during merge timer
 
 
     dataset: str
@@ -22,17 +21,16 @@ class ExperimentConfig(TypedDict):
     device: str
 
 experiment_config_data = {
-    "methods": ['greedy'], #['greedy', 'aggregation', 'simple']
+    "experiment_id": 'B1', #['B1', 'N1', 'N2', 'N3', 'M1', 'M2', 'M3'],
     "prompter": 'diversified_cot', #['simple', 'diversified_cot']
-    "n_init_chains": [4, 8],
-    "num_samples_eval": 1,
+    "n_init_chains": 7,
+    "num_samples_eval": None,
     "max_steps": 8,
     "max_tokens_per_step": 100,
     "num_few_shots": 8,
     "temperature": 0.7,
 
     "merge_every": 2,
-    "merge_after": True,
 
     "dataset": "gsm8k",
     "model_name": "google/gemma-3-1b-it",

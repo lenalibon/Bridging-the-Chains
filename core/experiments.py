@@ -16,26 +16,17 @@ from core.stepper import Stepper # type: ignore
 
 from .utils import *
 
-# ### Summary of the planned Methods
-# - [DONE] BaselineGreedy: select the answer from the single chain with the highest probability without merging or clustering.
-# - [WIP] BaselineAggregate: aggregate all answers into a single output without clustering.
-# - MethodMergingDuringGeneration: 
-#   - MethodMergingRepresentatives:
-#     - MethodMergingRepresentativesMaxProb
-#     - MethodMergingRepresentativesClusterCentoid
-#   - MethodMergingWithinCluster
-# - MethodMergingAfterGeneration
 
 logger = get_logger()
 
-class Method:
+class Experiment:
     def __init__(self,
                  model: AutoModelForCausalLM,
                  tokenizer: AutoTokenizer,
                  prompter: 'Prompter',
                  config: ExperimentConfig,
                  clusterer: Optional['Clusterer'] = None,
-                 merger: Optional['Merger'] = None,
+                 during_merger: Optional['Merger'] = None,
                  post_merger: Optional['Merger'] = None,
                  label = None,
                  n_init_chains: int = 1
@@ -44,16 +35,25 @@ class Method:
         self.tokenizer = tokenizer
         self.prompter = prompter
         self.clusterer = clusterer
-        # The first merger `merger` is applied during generation, if `merge_every` is set to a positive integer.
-        self.merger = merger
-        # The second merger, `post_merger`, is applied to the chains after generation is complete, if `merge_after==True`.
-        # Why not one merger? for flexibility
+
+        # Either during_merger or post_merger, not both
+        assert (during_merger is None or post_merger is None) and (during_merger is not None or post_merger is not None), \
+            "You can only use one of the during_merger or post_merger, not both at the same time."
+        self.use_during_merger = during_merger is not None
+        
+        # Applied during generation, `merge_every` tells the number of chain steps after which we merge
+        self.during_merger = during_merger
+        self.merge_every = config.merge_every if during_merger else None
+        if self.during_merger is not None:
+            assert config.merge_every > 0, "merge_every must be greater than 0"
+
+        # Applied to the chains after generation is complete
         self.post_merger = post_merger
+
         # The number of initial chains to generate, at first step.
         self.n_init_chains = n_init_chains 
-        self.merge_every = config.merge_every
-        self.merge_after = config.merge_after 
-        # The label is used in the filename with the method results
+
+        # The label is used in the filename with the experiment results
         self.label = label or self.__class__.__name__
         self.stepper = Stepper(model, tokenizer, config = config)
 
@@ -72,15 +72,16 @@ class Method:
         chains: ListChains = self.stepper.first_step_in_all(prompter = self.prompter, question=question, n=self.n_init_chains)
         counter = 1
         while not chains.all_complete():
-            if self.merge_every and counter % self.merge_every == 0:
+            if self.use_during_merger and counter % self.merge_every == 0:
                 assert self.clusterer
-                assert self.merger
+                assert self.during_merger
                 chain_id_clusters = self.clusterer(chains, question)
-                chains = self.merger(chains, chain_id_clusters) # type: ignore
+                chains = self.during_merger(chains, chain_id_clusters) # type: ignore
             chains = self.stepper.next_step_in_all(chains)
             counter += 1
         
-        if self.merge_after:
+        # Post merger
+        if not self.use_during_merger:
             assert self.post_merger
             assert self.clusterer
             chain_id_clusters = self.clusterer(chains, question)
@@ -89,8 +90,8 @@ class Method:
         return chains
 
 
-class BaselineGreedy(Method):
-    """Select the answer from the single chain with the highest probability without merging or clustering"""
+class ExperimentB1(Experiment):
+    """Generate n chains; pick highest-probability chain as the answer."""
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         # In the greedy baseline,
         # 1. "merging" happens after generation,
@@ -98,21 +99,26 @@ class BaselineGreedy(Method):
         super().__init__(model, tokenizer, prompter, config,
                          clusterer=TrivialClusterer(config),
                          post_merger=MergerMaxProb(TrivialMergeFunction()),
-                         **kwargs)
+                         label="ExperimentB1",
+                         n_init_chains=config.n_init_chains)
 
-class BaselineAggregation(Method):
-    """Aggregation Approach: Aggregating all answers into a single output without clustering."""
+class ExperimentN1(Experiment):
+    """Cluster once after k steps; pick highest-P chain per cluster."""
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
-        super().__init__(model, tokenizer, prompter, config,
-                         clusterer=TrivialClusterer(config),
-                         post_merger=Merger(SummarizingMergeFunction(model, tokenizer, config)),
-                         **kwargs)
+        super().__init__(model, tokenizer, prompter, config, 
+                         clusterer=EntailmentCluster(config),
+                         during_merger = MergerMaxProb(SummarizingMergeFunction(model, tokenizer, config)),
+                         label="ExperimentN1",
+                         n_init_chains=config.n_init_chains
+        )
 
-
-class BaselineSimple(Method):
-    "No branching, no clustering, no merging"
+# TODO starting from here, also change method -> experiment everywhere
+class ExperimentN2(Experiment):
+    "Cluster every k steps; summarize all chains in each cluster."
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
-        super().__init__(model, tokenizer, prompter, config, **kwargs)
+        super().__init__(model, tokenizer, prompter, config, 
+                         cluster=EntailmentCluster(config),
+                         during_merger=
 
 class EmbeddingMethodTest(Method):
     """Dummy method for verifying that embedding clustering works"""

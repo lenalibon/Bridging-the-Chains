@@ -2,7 +2,7 @@ import argparse
 from functools import partial
 from pathlib import Path
 
-from core.method import BaselineAggregation, BaselineGreedy, BaselineSimple, EmbeddingMethodTest
+from core.experiments import BaselineAggregation, BaselineGreedy, BaselineSimple, EmbeddingMethodTest
 from core.prompter import DiversifiedCoTPrompter, SimplePrompter
 import datasets
 import fire
@@ -16,7 +16,7 @@ from transformers import (  # type: ignore
 
 from core.chain import Chains
 from core.constants import DataGetter
-from core.method import BaselineSimple
+from core.experiments import BaselineSimple
 from core.constants import DataGetter
 from core.utils import get_logger, get_timestamp, write_jsonl
 from core.experiment_config import experiment_config, ExperimentConfig
@@ -37,7 +37,7 @@ def clear_cache():
 clear_cache()
 set_seed(42)
 
-method_mappings = {
+experiment_mappings = {
     'greedy': EmbeddingMethodTest,
     'aggregation': BaselineAggregation,
     'simple': BaselineSimple
@@ -59,16 +59,10 @@ class Experiment:
         data_getters: list[DataGetter] = [partial(self.get_gsm8k, n=self.config.num_samples_eval)] # FIXME delete n=
         model, tokenizer = self.get_model_and_tokenizer()
         prompter = prompter_mappings[self.config.prompter](folder_path = self.config.few_shots_folder_path, n_shots = self.config.num_few_shots) # FIXME: TODO use autocot
-        if len(self.config.methods) != len(self.config.n_init_chains):
-            if len(self.config.methods) == 1:
-                self.config.methods = [self.config.methods[0] for _ in range(len(self.config.n_init_chains))]
-            else:
-                raise ValueError("Number of methods and number of initial chains must be the same.")
-        methods = [
-            method_mappings[method](model, tokenizer, prompter, self.config,
-                   label=method_mappings[method].__name__, n_init_chains = n_init_chains)
-            for method, n_init_chains in zip(self.config.methods, self.config.n_init_chains)
-        ]
+        
+        experiment = experiment_mappings[experiment_id](model, tokenizer, prompter, self.config,
+                   label=experiment_mappings[experiment_id].__name__, n_init_chains = self.config.n_init_chains)
+        
         for get_data in data_getters:
             eval_data, dataset_label = get_data()
             for method in methods:
@@ -97,7 +91,7 @@ class Experiment:
         
     def get_gsm8k(self, n=None) -> tuple['Dataset', str]:
         # NOTE: using the train split for evaluation
-        split = datasets.load_dataset(self.config.dataset, "main")["test"] # type: ignore
+        split = datasets.load_dataset(self.config.dataset, "main")["train"] # type: ignore
         label = self.config.dataset 
         if n is not None:
             split = split.select(range(n)) # type: ignore
@@ -118,10 +112,5 @@ class Experiment:
 
 # Usage: python -m core.main
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run experiment.")
-    parser.add_argument("--n_chains", type=int, default=5, help="Number of chains to start with.")
-    parser.add_argument("--n_shots", type=int, default=8, help="Number of few-shot examples.")
-    parser.add_argument("--folder_path", type=str, default="few-shot/gsm8k_few_shot/", help="Path to already generated few-shot examples.")
-
     exp = Experiment(experiment_config)
     fire.Fire(exp.eval)
