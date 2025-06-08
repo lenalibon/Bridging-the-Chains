@@ -3,12 +3,12 @@ from typing import List, Type, TypedDict
 
 class ExperimentConfig(TypedDict):
     experiment_id:str # as defined in Table 1 of the paper
-    prompter: str 
+    prompter: str # which prompter to use
     n_init_chains: int # number of initial chains
-    num_samples_eval: int
+    num_samples_eval: int # how many samples to evaluate on, None means all samples in the dataset
     max_steps: int
     max_tokens_per_step: int
-    num_few_shots: int
+    num_few_shots: int # number of few-shot examples to use in the prompter
     temperature: float
 
     merge_every: int # number of steps after which we merge chains if we use during merge timer

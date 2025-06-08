@@ -2,7 +2,7 @@ import argparse
 from functools import partial
 from pathlib import Path
 
-from core.experiments import BaselineAggregation, BaselineGreedy, BaselineSimple, EmbeddingMethodTest
+from core.experiments import BaselineAggregation, BaselineGreedy, BaselineSimple, EmbeddingexperimentTest
 from core.prompter import DiversifiedCoTPrompter, SimplePrompter
 import datasets
 import fire
@@ -38,9 +38,13 @@ clear_cache()
 set_seed(42)
 
 experiment_mappings = {
-    'greedy': EmbeddingMethodTest,
-    'aggregation': BaselineAggregation,
-    'simple': BaselineSimple
+    'B1': ExperimentB1,
+    'N1': ExperimentN1,
+    'N2': ExperimentN2,
+    'N3': ExperimentN3,
+    'M1': ExperimentM1,
+    'M2': ExperimentM2,
+    'M3': ExperimentM3
 }
 
 prompter_mappings = {
@@ -65,16 +69,15 @@ class Experiment:
         
         for get_data in data_getters:
             eval_data, dataset_label = get_data()
-            for method in methods:
-                eval_label = f"{method.label}___{dataset_label}"
-                self.eval_method(method, eval_data, label=eval_label)
+            eval_label = f"{experiment.label}___{dataset_label}"
+            self.eval_experiment(experiment, eval_data, label=eval_label)
 
-    def eval_method(self, method, eval_data, label="eval"):
+    def eval_experiment(self, experiment, eval_data, label="eval"):
         results = []
         for i, sample in enumerate(eval_data):
             question = sample['question']
             true_answer = sample['answer']
-            pred_chains: Chains = method.generate_answer(question)
+            pred_chains: Chains = experiment.generate_answer(question)
             # NOTE: roscoe's gsm8k.json is different
             # FIXME: only the first chain is written! I am not sure what we should do if there are more chains. -sb
             clean_text = pred_chains[0].get_clean_text()

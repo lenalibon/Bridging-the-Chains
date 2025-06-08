@@ -19,7 +19,7 @@ from .utils import *
 
 logger = get_logger()
 
-class Experiment:
+class RunExperiment:
     def __init__(self,
                  model: AutoModelForCausalLM,
                  tokenizer: AutoTokenizer,
@@ -90,7 +90,7 @@ class Experiment:
         return chains
 
 
-class ExperimentB1(Experiment):
+class ExperimentB1(RunExperiment):
     """Generate n chains; pick highest-probability chain as the answer."""
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         # In the greedy baseline,
@@ -102,7 +102,7 @@ class ExperimentB1(Experiment):
                          label="ExperimentB1",
                          n_init_chains=config.n_init_chains)
 
-class ExperimentN1(Experiment):
+class ExperimentN1(RunExperiment):
     """Cluster once after k steps; pick highest-P chain per cluster."""
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         super().__init__(model, tokenizer, prompter, config, 
@@ -113,7 +113,7 @@ class ExperimentN1(Experiment):
         )
 
 # TODO starting from here, also change method -> experiment everywhere
-class ExperimentN2(Experiment):
+class ExperimentN2(RunExperiment):
     "Cluster every k steps; summarize all chains in each cluster."
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         super().__init__(model, tokenizer, prompter, config, 
@@ -123,7 +123,7 @@ class ExperimentN2(Experiment):
                          n_init_chains=config.n_init_chains
         )
 
-class ExperimentN3(Experiment):
+class ExperimentN3(RunExperiment):
     """Cluster completed chains; majority‐vote by size; pick highest‐$P$"""
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         super().__init__(model, tokenizer, prompter, config,
@@ -133,7 +133,7 @@ class ExperimentN3(Experiment):
                          n_init_chains=config.n_init_chains
         )
 
-class ExperimentM1(Experiment):
+class ExperimentM1(RunExperiment):
     """Cluster once after k steps; pick centroid-closest chain per cluster"""
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         clusterer = EmbeddingCluster(config)
@@ -144,7 +144,7 @@ class ExperimentM1(Experiment):
                          n_init_chains=config.n_init_chains
         )
 
-class ExperimentM2(Experiment):
+class ExperimentM2(RunExperiment):
     """Cluster every k steps; summarize all chains in each cluster."""
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         clusterer = EmbeddingCluster(config)
@@ -155,7 +155,7 @@ class ExperimentM2(Experiment):
                          n_init_chains=config.n_init_chains
         )
         
-class ExperimentM3(Experiment):
+class ExperimentM3(RunExperiment):
     """Cluster completed chains; majority-vote by size; pick centroid-closest."""
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         clusterer = EmbeddingCluster(config)
