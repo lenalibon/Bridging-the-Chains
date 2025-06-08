@@ -2,7 +2,7 @@ import argparse
 from functools import partial
 from pathlib import Path
 
-from core.experiments import BaselineAggregation, BaselineGreedy, BaselineSimple, EmbeddingexperimentTest
+from core.experiments import ExperimentB1, ExperimentN1, ExperimentN2, ExperimentN3, ExperimentM1, ExperimentM2, ExperimentM3
 from core.prompter import DiversifiedCoTPrompter, SimplePrompter
 import datasets
 import fire
@@ -16,8 +16,6 @@ from transformers import (  # type: ignore
 
 from core.chain import Chains
 from core.constants import DataGetter
-from core.experiments import BaselineSimple
-from core.constants import DataGetter
 from core.utils import get_logger, get_timestamp, write_jsonl
 from core.experiment_config import experiment_config, ExperimentConfig
 
@@ -29,8 +27,8 @@ logger = get_logger()
 
 def clear_cache():
     gc.collect()
-    torch.cuda.empty_cache()
     if torch.cuda.is_available():
+        torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
 
 
@@ -64,8 +62,8 @@ class Experiment:
         model, tokenizer = self.get_model_and_tokenizer()
         prompter = prompter_mappings[self.config.prompter](folder_path = self.config.few_shots_folder_path, n_shots = self.config.num_few_shots) # FIXME: TODO use autocot
         
-        experiment = experiment_mappings[experiment_id](model, tokenizer, prompter, self.config,
-                   label=experiment_mappings[experiment_id].__name__, n_init_chains = self.config.n_init_chains)
+        experiment = experiment_mappings[self.config.experiment_id](model, tokenizer, prompter, self.config,
+                   label=experiment_mappings[self.config.experiment_id].__name__, n_init_chains = self.config.n_init_chains)
         
         for get_data in data_getters:
             eval_data, dataset_label = get_data()

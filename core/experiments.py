@@ -5,6 +5,7 @@ from typing import Optional
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from clustering.embedding import EmbeddingCluster
+from clustering.entailment import EntailmentCluster
 from core.chain import Chains, ListChains
 from core.clusterer import Clusterer, TrivialClusterer
 from core.experiment_config import ExperimentConfig
@@ -112,7 +113,6 @@ class ExperimentN1(RunExperiment):
                          n_init_chains=config.n_init_chains
         )
 
-# TODO starting from here, also change method -> experiment everywhere
 class ExperimentN2(RunExperiment):
     "Cluster every k steps; summarize all chains in each cluster."
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
