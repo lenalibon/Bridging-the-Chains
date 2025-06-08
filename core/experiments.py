@@ -118,15 +118,50 @@ class ExperimentN2(Experiment):
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         super().__init__(model, tokenizer, prompter, config, 
                          cluster=EntailmentCluster(config),
-                         during_merger=
+                         during_merger=MergerWithinCluster(SummarizingMergeFunction(model, tokenizer, config)),
+                         label="ExperimentN2",
+                         n_init_chains=config.n_init_chains
+        )
 
-class EmbeddingMethodTest(Method):
-    """Dummy method for verifying that embedding clustering works"""
-    def __init__(self, model, tokenizer, prompter, config, **kwargs): 
-        # TODO: use a more powerful model for summarizing, maybe with an API call
+class ExperimentN3(Experiment):
+    """Cluster completed chains; majority‐vote by size; pick highest‐$P$"""
+    def __init__(self, model, tokenizer, prompter, config, **kwargs):
+        super().__init__(model, tokenizer, prompter, config,
+                         clusterer=EntailmentCluster(config),
+                         post_merger=MergerMajorityThenMaxProb(),
+                         label="ExperimentN3",
+                         n_init_chains=config.n_init_chains
+        )
+
+class ExperimentM1(Experiment):
+    """Cluster once after k steps; pick centroid-closest chain per cluster"""
+    def __init__(self, model, tokenizer, prompter, config, **kwargs):
         clusterer = EmbeddingCluster(config)
         super().__init__(model, tokenizer, prompter, config,
                          clusterer=clusterer,
-                         merger=MergerClusterCentroid(SummarizingMergeFunction(model, tokenizer, config), clusterer),
-                         post_merger=MergerClusterCentroid(SummarizingMergeFunction(model, tokenizer, config), clusterer),
-                         **kwargs)
+                         during_merger=MergerClusterCentroid(SummarizingMergeFunction(model, tokenizer, config), clusterer),
+                         label="ExperimentM1",
+                         n_init_chains=config.n_init_chains
+        )
+
+class ExperimentM2(Experiment):
+    """Cluster every k steps; summarize all chains in each cluster."""
+    def __init__(self, model, tokenizer, prompter, config, **kwargs):
+        clusterer = EmbeddingCluster(config)
+        super().__init__(model, tokenizer, prompter, config,
+                         clusterer=clusterer,
+                         during_merger=MergerWithinCluster(SummarizingMergeFunction(model, tokenizer, config)),
+                         label="ExperimentM2",
+                         n_init_chains=config.n_init_chains
+        )
+        
+class ExperimentM3(Experiment):
+    """Cluster completed chains; majority-vote by size; pick centroid-closest."""
+    def __init__(self, model, tokenizer, prompter, config, **kwargs):
+        clusterer = EmbeddingCluster(config)
+        super().__init__(model, tokenizer, prompter, config,
+                         clusterer=clusterer,
+                         post_merger=MergerMajorityThenCentroid(clusterer=clusterer),
+                         label="ExperimentM3",
+                         n_init_chains=config.n_init_chains
+        )
