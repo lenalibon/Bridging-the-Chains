@@ -72,11 +72,20 @@ class RunExperiment:
         assert self.prompter
         chains: ListChains = self.stepper.first_step_in_all(prompter = self.prompter, question=question, n=self.n_init_chains)
         counter = 1
+        counter_clustering = 0
+        max_counter_clutering = math.floor(math.log2(self.n_init_chains))
+        
         while not chains.all_complete():
             if self.use_during_merger and counter % self.merge_every == 0:
                 assert self.clusterer
                 assert self.during_merger
                 chain_id_clusters = self.clusterer(chains, question)
+                counter_clustering += 1
+
+                if isinstance(self.clusterer, EntailmentCluster) and counter_clustering >= max_counter_clutering:
+                    if len(set(chain_id_clusters)) > 1:
+                        logger.warning(f"Fallback Sragety: More than one cluster after {counter_clustering} clustering steps, falling back to single cluster.")
+                        chain_id_clusters = [0] * len(chains)  
                 chains = self.during_merger(chains, chain_id_clusters) # type: ignore
             chains = self.stepper.next_step_in_all(chains)
             counter += 1

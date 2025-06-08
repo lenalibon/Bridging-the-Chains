@@ -9,14 +9,14 @@ class ExperimentConfig(TypedDict):
     max_steps: int
     max_tokens_per_step: int
     num_few_shots: int # number of few-shot examples to use in the prompter
-    temperature: float
+    temperature: float # temperature for the model generation, 0.0 means greedy decoding, 1.0 means uniform distribution over tokens, etc.
 
     merge_every: int # number of steps after which we merge chains if we use during merge timer
 
 
-    dataset: str
-    model_name: str
-    few_shots_folder_path: str
+    dataset: str # name of the dataset to use, so far only "gsm8k" works
+    model_name: str # name of the model to use, e.g. "google/gemma-3-1b-it"
+    few_shots_folder_path: str # path to the folder with few-shot examples that were generated before the execution
     use_cache: bool
     device: str
 
@@ -33,10 +33,10 @@ experiment_config_data = {
     "merge_every": 2,
 
     "dataset": "gsm8k",
-    "model_name": "google/gemma-3-1b-it",
+    "model_name": "Qwen/Qwen2.5-0.5B-Instruct",
     "few_shots_folder_path": "few-shot/gsm8k_few_shot/",
-    "use_cache": True,
-    "device": "mps"
+    "use_cache": False,
+    "device": "cuda"
 }
 
 experiment_config: ExperimentConfig = Munch.fromDict(experiment_config_data)

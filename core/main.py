@@ -100,11 +100,9 @@ class Experiment:
         return (split, label) # type: ignore
 
     def get_model_and_tokenizer(self):
-        model_name = "google/gemma-3-1b-it"
-        # model_name = "Qwen/Qwen2.5-0.5B-Instruct"
-        tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
+        tokenizer = AutoTokenizer.from_pretrained(self.config.model_name, padding_side='left')
         # model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=BitsAndBytesConfig(load_in_8bit=True))
-        model = AutoModelForCausalLM.from_pretrained(model_name).to(self.config.device)
+        model = AutoModelForCausalLM.from_pretrained(self.config.model_name).to(self.config.device)
         return model, tokenizer
 
 
