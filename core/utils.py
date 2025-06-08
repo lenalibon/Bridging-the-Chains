@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from functools import cache
 from typing import Iterable
+from pathlib import Path
 
 import torch
 from rich.console import Console
@@ -108,3 +109,24 @@ def get_logger():
 
 def set_seed(seed: int):
     torch.manual_seed(42)
+
+def get_logger_slurm():
+    logger = logging.getLogger("experiment_logger")
+    logger.setLevel(logging.INFO)
+
+    if not logger.handlers:  # Prevent adding handlers multiple times
+        # Create logs directory
+        Path("logs").mkdir(exist_ok=True)
+
+        # Timestamped log file
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        log_file = f"logs/experiment_log_{timestamp}.txt"
+
+        # File handler
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.INFO)
+        file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(file_formatter)
+        logger.addHandler(file_handler)
+
+    return logger

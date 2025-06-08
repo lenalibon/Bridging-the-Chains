@@ -48,6 +48,6 @@ ENV/
 
 .pytest_cache/
 
-
+logs
 run.sh
 sample_*

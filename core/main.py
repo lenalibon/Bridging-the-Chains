@@ -16,14 +16,15 @@ from transformers import (  # type: ignore
 
 from core.chain import Chains
 from core.constants import DataGetter
-from core.utils import get_logger, get_timestamp, write_jsonl
+from core.utils import get_logger, get_logger_slurm, get_timestamp, write_jsonl
 from core.experiment_config import experiment_config, ExperimentConfig
 
 import gc
 
 from .utils import *
 
-logger = get_logger()
+#logger = get_logger()  # Use this for local runs
+logger = get_logger_slurm()
 
 def clear_cache():
     gc.collect()

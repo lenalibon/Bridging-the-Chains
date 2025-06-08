@@ -21,7 +21,7 @@ class ExperimentConfig(TypedDict):
     device: str
 
 experiment_config_data = {
-    "experiment_id": 'B1', #['B1', 'N1', 'N2', 'N3', 'M1', 'M2', 'M3'],
+    "experiment_id": 'N1', #['B1', 'N1', 'N2', 'N3', 'M1', 'M2', 'M3'],
     "prompter": 'diversified_cot', #['simple', 'diversified_cot']
     "n_init_chains": 7,
     "num_samples_eval": None,
@@ -33,7 +33,7 @@ experiment_config_data = {
     "merge_every": 2,
 
     "dataset": "gsm8k",
-    "model_name": "Qwen/Qwen2.5-0.5B-Instruct",
+    "model_name": "microsoft/phi-1_5",
     "few_shots_folder_path": "few-shot/gsm8k_few_shot/",
     "use_cache": False,
     "device": "cuda"
