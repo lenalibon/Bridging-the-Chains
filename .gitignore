@@ -47,3 +47,7 @@ ENV/
 *.temp
 
 .pytest_cache/
+
+
+run.sh
+sample_*
