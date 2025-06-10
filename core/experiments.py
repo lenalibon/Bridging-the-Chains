@@ -126,7 +126,7 @@ class ExperimentN2(RunExperiment):
     "Cluster every k steps; summarize all chains in each cluster."
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         super().__init__(model, tokenizer, prompter, config, 
-                         cluster=EntailmentCluster(config, model, tokenizer),
+                         clusterer=EntailmentCluster(config, model, tokenizer),
                          during_merger=MergerWithinCluster(SummarizingMergeFunction(model, tokenizer, config)),
                          label="ExperimentN2",
                          n_init_chains=config.n_init_chains
