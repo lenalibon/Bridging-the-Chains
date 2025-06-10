@@ -19,9 +19,12 @@ class ExperimentConfig(TypedDict):
     few_shots_folder_path: str # path to the folder with few-shot examples that were generated before the execution
     use_cache: bool
     device: str
+    
+    nli_model_name: str # name of the NLI model to use for entailment, e.g. "cross-encoder/nli-deberta-v3-large"
+    embedding_model_name: str # name of the embedding model to use for clustering, e.g. "bert-base-uncased"
 
 experiment_config_data = {
-    "experiment_id": 'N1', #['B1', 'N1', 'N2', 'N3', 'M1', 'M2', 'M3'],
+    "experiment_id": 'B1', #['B1', 'N1', 'N2', 'N3', 'M1', 'M2', 'M3'],
     "prompter": 'diversified_cot', #['simple', 'diversified_cot']
     "n_init_chains": 7,
     "num_samples_eval": None,
@@ -33,10 +36,13 @@ experiment_config_data = {
     "merge_every": 2,
 
     "dataset": "gsm8k",
-    "model_name": "microsoft/phi-1_5",
+    "model_name": "microsoft/Phi-3-mini-128k-instruct",
     "few_shots_folder_path": "few-shot/gsm8k_few_shot/",
-    "use_cache": False,
-    "device": "cuda"
+    "use_cache": True,
+    "device": "cuda",
+    
+    "nli_model_name": "cross-encoder/nli-deberta-v3-large",  
+    "embedding_model_name": "bert-base-uncased"
 }
 
 experiment_config: ExperimentConfig = Munch.fromDict(experiment_config_data)

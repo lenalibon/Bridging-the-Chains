@@ -13,6 +13,9 @@ cd Bridging-the-Chains
 pip install -r requirements.txt
 ```
 
+### 3. Setup HF Token
+Create a file called `hf_token.txt` and insert your token.
+
 ### 3. Running an Experiment
 Run the main script using the default configuration in `core/experiment_config.py`:
 ```bash

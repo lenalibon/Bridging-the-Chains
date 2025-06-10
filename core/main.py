@@ -1,3 +1,4 @@
+from huggingface_hub import login
 import argparse
 from functools import partial
 from pathlib import Path
@@ -112,5 +113,8 @@ class Experiment:
 
 # Usage: python -m core.main
 if __name__ == "__main__":
+    with open("hf_token.txt", "r") as f:
+        token = f.read().strip()
+    login(token=token)
     exp = Experiment(experiment_config)
     fire.Fire(exp.eval)

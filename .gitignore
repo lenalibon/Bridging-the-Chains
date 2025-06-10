@@ -51,3 +51,4 @@ ENV/
 logs
 run.sh
 sample_*
+hf_token.txt

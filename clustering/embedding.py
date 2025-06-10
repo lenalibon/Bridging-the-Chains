@@ -15,8 +15,8 @@ logger = get_logger()
 class EmbeddingCluster(Clusterer):
 
     def __init__(self, config: ExperimentConfig):
-        self.tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-        self.model = AutoModel.from_pretrained("bert-base-uncased")
+        self.tokenizer = AutoTokenizer.from_pretrained(config.embedding_model_name)
+        self.model = AutoModel.from_pretrained(config.embedding_model_name))
         self.model.eval()
         self.embeddings = None
         self.centroids = None
