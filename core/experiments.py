@@ -116,7 +116,7 @@ class ExperimentN1(RunExperiment):
     """Cluster once after k steps; pick highest-P chain per cluster."""
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         super().__init__(model, tokenizer, prompter, config, 
-                         clusterer=EntailmentCluster(config),
+                         clusterer=EntailmentCluster(config, model, tokenizer,
                          during_merger = MergerMaxProb(SummarizingMergeFunction(model, tokenizer, config)),
                          label="ExperimentN1",
                          n_init_chains=config.n_init_chains
@@ -126,7 +126,7 @@ class ExperimentN2(RunExperiment):
     "Cluster every k steps; summarize all chains in each cluster."
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         super().__init__(model, tokenizer, prompter, config, 
-                         cluster=EntailmentCluster(config),
+                         cluster=EntailmentCluster(config, model, tokenizer),
                          during_merger=MergerWithinCluster(SummarizingMergeFunction(model, tokenizer, config)),
                          label="ExperimentN2",
                          n_init_chains=config.n_init_chains
@@ -136,7 +136,7 @@ class ExperimentN3(RunExperiment):
     """Cluster completed chains; majority‐vote by size; pick highest‐$P$"""
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         super().__init__(model, tokenizer, prompter, config,
-                         clusterer=EntailmentCluster(config),
+                         clusterer=EntailmentCluster(config, model, tokenizer),
                          post_merger=MergerMajorityThenMaxProb(),
                          label="ExperimentN3",
                          n_init_chains=config.n_init_chains

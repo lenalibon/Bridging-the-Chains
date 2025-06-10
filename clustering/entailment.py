@@ -22,16 +22,15 @@ class StopAfterIntermediateAnswer(StoppingCriteria):
 
 class EntailmentCluster(Clusterer):
 
-    def __init__(self, config: ExperimentConfig):
+    def __init__(self, config: ExperimentConfig, model_generate: AutoModelForCausalLM, tokenizer_generate: AutoTokenizer):
         # NLI model for entailment
         self.nli_tokenizer = AutoTokenizer.from_pretrained(config.nli_model_name)
         self.nli_model = AutoModelForSequenceClassification.from_pretrained(config.nli_model_name).to(config.device)
         self.nli_model.eval()
 
-        # Autoregressive model to generate intermediate answers # TODO use already loaded model
-        self.tokenizer_generate = AutoTokenizer.from_pretrained(config.model_name, padding_side='left')
-        self.model_generate = AutoModelForCausalLM.from_pretrained(config.model_name).to(config.device)
-        self.model_generate.eval()
+        # Autoregressive model to generate intermediate answers 
+        self.tokenizer_generate = tokenizer_generate
+        self.model_generate = model_generate
 
     def generate_intermediate_answer(self, question: str, cot_steps: list[str]) -> str:
         filled_prompt = INTERMEDIATE_ANSWER_PROMPT_TEMPLATE.format(
