@@ -1,8 +1,9 @@
+from huggingface_hub import login
 import argparse
 from functools import partial
 from pathlib import Path
 
-from core.method import BaselineAggregation, BaselineGreedy, BaselineSimple, EmbeddingMethodTest
+from core.experiments import ExperimentB1, ExperimentN1, ExperimentN2, ExperimentN3, ExperimentM1, ExperimentM2, ExperimentM3
 from core.prompter import DiversifiedCoTPrompter, SimplePrompter
 import datasets
 import fire
@@ -16,31 +17,34 @@ from transformers import (  # type: ignore
 
 from core.chain import Chains
 from core.constants import DataGetter
-from core.method import BaselineSimple
-from core.constants import DataGetter
-from core.utils import get_logger, get_timestamp, write_jsonl
+from core.utils import get_logger, get_logger_slurm, get_timestamp, write_jsonl
 from core.experiment_config import experiment_config, ExperimentConfig
 
 import gc
 
 from .utils import *
 
-logger = get_logger()
+#logger = get_logger()  # Use this for local runs
+logger = get_logger_slurm()
 
 def clear_cache():
     gc.collect()
-    torch.cuda.empty_cache()
     if torch.cuda.is_available():
+        torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
 
 
 clear_cache()
 set_seed(42)
 
-method_mappings = {
-    'greedy': EmbeddingMethodTest,
-    'aggregation': BaselineAggregation,
-    'simple': BaselineSimple
+experiment_mappings = {
+    'B1': ExperimentB1,
+    'N1': ExperimentN1,
+    'N2': ExperimentN2,
+    'N3': ExperimentN3,
+    'M1': ExperimentM1,
+    'M2': ExperimentM2,
+    'M3': ExperimentM3
 }
 
 prompter_mappings = {
@@ -59,28 +63,21 @@ class Experiment:
         data_getters: list[DataGetter] = [partial(self.get_gsm8k, n=self.config.num_samples_eval)] # FIXME delete n=
         model, tokenizer = self.get_model_and_tokenizer()
         prompter = prompter_mappings[self.config.prompter](folder_path = self.config.few_shots_folder_path, n_shots = self.config.num_few_shots) # FIXME: TODO use autocot
-        if len(self.config.methods) != len(self.config.n_init_chains):
-            if len(self.config.methods) == 1:
-                self.config.methods = [self.config.methods[0] for _ in range(len(self.config.n_init_chains))]
-            else:
-                raise ValueError("Number of methods and number of initial chains must be the same.")
-        methods = [
-            method_mappings[method](model, tokenizer, prompter, self.config,
-                   label=method_mappings[method].__name__, n_init_chains = n_init_chains)
-            for method, n_init_chains in zip(self.config.methods, self.config.n_init_chains)
-        ]
+        
+        experiment = experiment_mappings[self.config.experiment_id](model, tokenizer, prompter, self.config,
+                   label=experiment_mappings[self.config.experiment_id].__name__, n_init_chains = self.config.n_init_chains)
+        
         for get_data in data_getters:
             eval_data, dataset_label = get_data()
-            for method in methods:
-                eval_label = f"{method.label}___{dataset_label}"
-                self.eval_method(method, eval_data, label=eval_label)
+            eval_label = f"{experiment.label}___{dataset_label}"
+            self.eval_experiment(experiment, eval_data, label=eval_label)
 
-    def eval_method(self, method, eval_data, label="eval"):
+    def eval_experiment(self, experiment, eval_data, label="eval"):
         results = []
         for i, sample in enumerate(eval_data):
             question = sample['question']
             true_answer = sample['answer']
-            pred_chains: Chains = method.generate_answer(question)
+            pred_chains: Chains = experiment.generate_answer(question)
             # NOTE: roscoe's gsm8k.json is different
             # FIXME: only the first chain is written! I am not sure what we should do if there are more chains. -sb
             clean_text = pred_chains[0].get_clean_text()
@@ -97,7 +94,7 @@ class Experiment:
         
     def get_gsm8k(self, n=None) -> tuple['Dataset', str]:
         # NOTE: using the train split for evaluation
-        split = datasets.load_dataset(self.config.dataset, "main")["test"] # type: ignore
+        split = datasets.load_dataset(self.config.dataset, "main")["train"] # type: ignore
         label = self.config.dataset 
         if n is not None:
             split = split.select(range(n)) # type: ignore
@@ -105,11 +102,9 @@ class Experiment:
         return (split, label) # type: ignore
 
     def get_model_and_tokenizer(self):
-        model_name = "google/gemma-3-1b-it"
-        # model_name = "Qwen/Qwen2.5-0.5B-Instruct"
-        tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
+        tokenizer = AutoTokenizer.from_pretrained(self.config.model_name, padding_side='left')
         # model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=BitsAndBytesConfig(load_in_8bit=True))
-        model = AutoModelForCausalLM.from_pretrained(model_name).to(self.config.device)
+        model = AutoModelForCausalLM.from_pretrained(self.config.model_name).to(self.config.device)
         return model, tokenizer
 
 
@@ -118,10 +113,8 @@ class Experiment:
 
 # Usage: python -m core.main
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run experiment.")
-    parser.add_argument("--n_chains", type=int, default=5, help="Number of chains to start with.")
-    parser.add_argument("--n_shots", type=int, default=8, help="Number of few-shot examples.")
-    parser.add_argument("--folder_path", type=str, default="few-shot/gsm8k_few_shot/", help="Path to already generated few-shot examples.")
-
+    with open("hf_token.txt", "r") as f:
+        token = f.read().strip()
+    login(token=token)
     exp = Experiment(experiment_config)
     fire.Fire(exp.eval)

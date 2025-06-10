@@ -141,3 +141,38 @@ class MergerWithinCluster(Merger):
     def get_chain_cluster(self, chains, id_cluster) -> list[Chain]:
         return [chains[i] for i in id_cluster]
     
+
+class MergerMajorityThenMaxProb(Merger):
+    """
+    First select largest cluster (majority vote by size) then within that cluster select highest-P chain
+    """
+    def __call__(self, chains: Chains, chain_id_clusters: list[IdCluster]) -> Chains:        
+        majority_cluster = max(chain_id_clusters, key=len)
+        best_chain = max((chains[i] for i in majority_cluster), key=lambda chain: chain.get_log_prob()) 
+        return best_chain.as_chains()
+    
+class MergerMajorityThenCentroid(Merger):
+    """
+    First select largest cluster (majority vote by size) then within that cluster select closest-to-centroid chain
+    """
+    def __init__(self, merge_fn: Optional[MergeFunction], clusterer: Clusterer):
+        super().__init__(merge_fn)
+        assert isinstance(clusterer, EmbeddingCluster), "MergerMajorityThenCentroid only works with EmbeddingCluster"
+        self.clusterer = clusterer
+
+    def __call__(self, chains: Chains, chain_id_clusters: list[IdCluster]) -> Chains:
+        majority_cluster_index, majority_cluster = max(enumerate(chain_id_clusters), key=lambda x: len(x[1]))
+
+        # 2. Find the chain closest to the centroid of this cluster
+        centroid = self.clusterer.get_centroids()[majority_cluster_index]
+        closest_chain = None
+        max_cos_sim = -float("inf")
+
+        for chain_id in majority_cluster:
+            embedding = self.clusterer.get_embeddings()[chain_id]
+            cos_sim = cosine_similarity(embedding, centroid, dim=0).item()
+            if closest_chain is None or cos_sim > max_cos_sim:
+                closest_chain = chains[chain_id]
+                max_cos_sim = cos_sim
+
+        return closest_chain.as_chains()

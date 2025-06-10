@@ -47,3 +47,8 @@ ENV/
 *.temp
 
 .pytest_cache/
+
+logs
+run.sh
+sample_*
+hf_token.txt

@@ -22,18 +22,15 @@ class StopAfterIntermediateAnswer(StoppingCriteria):
 
 class EntailmentCluster(Clusterer):
 
-    def __init__(self, config: ExperimentConfig):
+    def __init__(self, config: ExperimentConfig, model_generate: AutoModelForCausalLM, tokenizer_generate: AutoTokenizer):
         # NLI model for entailment
-        nli_model_name = "cross-encoder/nli-deberta-v3-large"
-        self.nli_tokenizer = AutoTokenizer.from_pretrained(nli_model_name)
-        self.nli_model = AutoModelForSequenceClassification.from_pretrained(nli_model_name).to(config.device)
+        self.nli_tokenizer = AutoTokenizer.from_pretrained(config.nli_model_name)
+        self.nli_model = AutoModelForSequenceClassification.from_pretrained(config.nli_model_name).to(config.device)
         self.nli_model.eval()
 
-        # Autoregressive model to generate intermediate answers
-        model_name = "google/gemma-3-1b-it"
-        self.tokenizer_generate = AutoTokenizer.from_pretrained(model_name, padding_side='left')
-        self.model_generate = AutoModelForCausalLM.from_pretrained(model_name).to(config.device)
-        self.model_generate.eval()
+        # Autoregressive model to generate intermediate answers 
+        self.tokenizer_generate = tokenizer_generate
+        self.model_generate = model_generate
 
     def generate_intermediate_answer(self, question: str, cot_steps: list[str]) -> str:
         filled_prompt = INTERMEDIATE_ANSWER_PROMPT_TEMPLATE.format(

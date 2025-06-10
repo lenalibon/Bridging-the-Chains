@@ -15,8 +15,8 @@ logger = get_logger()
 class EmbeddingCluster(Clusterer):
 
     def __init__(self, config: ExperimentConfig):
-        self.tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-        self.model = AutoModel.from_pretrained("bert-base-uncased")
+        self.tokenizer = AutoTokenizer.from_pretrained(config.embedding_model_name)
+        self.model = AutoModel.from_pretrained(config.embedding_model_name)
         self.model.eval()
         self.embeddings = None
         self.centroids = None
@@ -37,7 +37,10 @@ class EmbeddingCluster(Clusterer):
         # 1. Get kmeans cluster per chain
         X = np.array(chain_embeddings) # need to convert to numpy for sklearn
         # NOTE: always halfs number of chains, can also specify in the constructor instead
-        k = len(chain_embeddings) // 2 + 1 
+        if len(chain_embeddings) < 2:
+            k = 1
+        else:
+            k = len(chain_embeddings) // 2 + 1 
         kmeans = KMeans(n_clusters=k, random_state=0, n_init="auto")
         kmeans.fit(X)
         labels = kmeans.predict(X)
