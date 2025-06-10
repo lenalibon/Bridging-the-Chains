@@ -108,7 +108,7 @@ def get_logger():
     return logger
 
 def set_seed(seed: int):
-    torch.manual_seed(42)
+    torch.manual_seed(seed)
 
 def get_logger_slurm():
     logger = logging.getLogger("experiment_logger")

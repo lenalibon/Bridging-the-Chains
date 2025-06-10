@@ -144,7 +144,7 @@ class MergerWithinCluster(Merger):
 
 class MergerMajorityThenMaxProb(Merger):
     """
-    First select largest cluster (majority vote by size) then within that cluster selet highest-P chain
+    First select largest cluster (majority vote by size) then within that cluster select highest-P chain
     """
     def __call__(self, chains: Chains, chain_id_clusters: list[IdCluster]) -> Chains:        
         majority_cluster = max(chain_id_clusters, key=len)

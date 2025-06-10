@@ -9,7 +9,7 @@ from clustering.entailment import EntailmentCluster
 from core.chain import Chains, ListChains
 from core.clusterer import Clusterer, TrivialClusterer
 from core.experiment_config import ExperimentConfig
-from core.merger import Merger, MergerClusterCentroid, MergerMaxProb, SummarizingMergeFunction, TrivialMergeFunction
+from core.merger import Merger, MergerClusterCentroid, MergerMaxProb, SummarizingMergeFunction, TrivialMergeFunction, MergerWithinCluster
 from core.prompter import Prompter
 from core.stepper import Stepper # type: ignore
 
@@ -116,7 +116,7 @@ class ExperimentN1(RunExperiment):
     """Cluster once after k steps; pick highest-P chain per cluster."""
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         super().__init__(model, tokenizer, prompter, config, 
-                         clusterer=EntailmentCluster(config, model, tokenizer,
+                         clusterer=EntailmentCluster(config, model, tokenizer),
                          during_merger = MergerMaxProb(SummarizingMergeFunction(model, tokenizer, config)),
                          label="ExperimentN1",
                          n_init_chains=config.n_init_chains
