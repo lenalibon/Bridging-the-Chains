@@ -24,7 +24,7 @@ python -m core.main
 
 Edit `core/experiment_config.py`to change the experimental setup.
 
-### 4. Output Format 
+## Output Format 
 Results will be saved in the `results/` folder with filenames like: `results/greedy___gsm8k-first1___<timestamp>.jsonl`.
 
 Each line in the `.jsonl` file contains:
