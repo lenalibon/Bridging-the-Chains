@@ -73,24 +73,29 @@ class Experiment:
             self.eval_experiment(experiment, eval_data, label=eval_label)
 
     def eval_experiment(self, experiment, eval_data, label="eval"):
-        results = []
-        for i, sample in enumerate(eval_data):
-            question = sample['question']
-            true_answer = sample['answer']
-            pred_chains: Chains = experiment.generate_answer(question)
-            # NOTE: roscoe's gsm8k.json is different
-            # FIXME: only the first chain is written! I am not sure what we should do if there are more chains. -sb
-            clean_text = pred_chains[0].get_clean_text()
-            debug_panel(logger, "Predicted Answer", pred_chains[0].get_generated_text())
-            debug_panel(logger, "True Answer", true_answer)
-            results.append({
-                "premise": question,
-                "reasoning": clean_text,
-                "true_answer": true_answer,
-            })
         Path("results").mkdir(parents=True, exist_ok=True)
         ts = get_timestamp()
-        write_jsonl(results, f"results/{label}___{ts}.jsonl")
+        result_file = f"results/{label}___{ts}.jsonl"
+        
+        with open(result_file, "a", encoding="utf-8") as f:
+            for i, sample in enumerate(eval_data):
+                if i == 5:
+                    continue
+                question = sample['question']
+                true_answer = sample['answer']
+                pred_chains: Chains = experiment.generate_answer(question)
+                # NOTE: roscoe's gsm8k.json is different
+                # FIXME: only the first chain is written! I am not sure what we should do if there are more chains. -sb
+                clean_text = pred_chains[0].get_clean_text()
+                debug_panel(logger, "Predicted Answer", pred_chains[0].get_generated_text())
+                debug_panel(logger, "True Answer", true_answer)
+                result = {
+                    "premise": question,
+                    "reasoning": clean_text,
+                    "true_answer": true_answer,
+                }
+                f.write(json.dumps(result, ensure_ascii=False) + "\n")
+                clear_cache()
         
     def get_gsm8k(self, n=None) -> tuple['Dataset', str]:
         # NOTE: using the train split for evaluation

@@ -44,7 +44,7 @@ class SummarizingMergeFunction(MergeFunction):
         sum_chain = self.stepper.first_step_in_one_summarization(prompt)
         while not sum_chain.is_complete():
             sum_chain = self.stepper.next_step_in_one(sum_chain)
-            # debug_panel("Generated lines", repr(sum_chain.get_generated_lines()))
+            #debug_panel("Generated lines", repr(sum_chain.get_generated_lines()))
         new_chain = self.make_new_chain(chain_list, sum_chain)
         return new_chain
         

@@ -27,16 +27,16 @@ experiment_config_data = {
     "experiment_id": 'B1', #['B1', 'N1', 'N2', 'N3', 'M1', 'M2', 'M3'],
     "prompter": 'diversified_cot', #['simple', 'diversified_cot']
     "n_init_chains": 7,
-    "num_samples_eval": None,
-    "max_steps": 8,
-    "max_tokens_per_step": 100,
-    "num_few_shots": 8,
+    "num_samples_eval": 100,
+    "max_steps": 7,
+    "max_tokens_per_step": 2000,
+    "num_few_shots": 1,
     "temperature": 0.7,
 
     "merge_every": 2,
 
     "dataset": "gsm8k",
-    "model_name": "microsoft/Phi-3-mini-128k-instruct",
+    "model_name": "google/gemma-3-1b-it",
     "few_shots_folder_path": "few-shot/gsm8k_few_shot/",
     "use_cache": True,
     "device": "cuda",

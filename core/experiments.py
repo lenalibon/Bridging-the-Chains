@@ -36,6 +36,7 @@ class RunExperiment:
         self.tokenizer = tokenizer
         self.prompter = prompter
         self.clusterer = clusterer
+        self.config = config
 
         # Either during_merger or post_merger, not both
         assert (during_merger is None or post_merger is None) and (during_merger is not None or post_merger is not None), \
@@ -71,12 +72,15 @@ class RunExperiment:
         set_seed(42)
         assert self.prompter
         chains: ListChains = self.stepper.first_step_in_all(prompter = self.prompter, question=question, n=self.n_init_chains)
-        counter = 1
+        counter = 0
         counter_clustering = 0
         max_counter_clutering = math.floor(math.log2(self.n_init_chains))
-        
+        # print("Begin")
         while not chains.all_complete():
-            if self.use_during_merger and counter % self.merge_every == 0:
+            if counter > self.config.max_steps:
+                logger.warning(f"Reached max steps {self.config.max_steps}, stopping generation.")
+                break
+            if self.use_during_merger and counter % self.merge_every == 0 and counter != 0:
                 assert self.clusterer
                 assert self.during_merger
                 chain_id_clusters = self.clusterer(chains, question)
@@ -84,18 +88,23 @@ class RunExperiment:
 
                 if isinstance(self.clusterer, EntailmentCluster) and counter_clustering >= max_counter_clutering:
                     if len(set(chain_id_clusters)) > 1:
-                        logger.warning(f"Fallback Sragety: More than one cluster after {counter_clustering} clustering steps, falling back to single cluster.")
+                        logger.warning(f"Fallback Stragety: More than one cluster after {counter_clustering} clustering steps, falling back to single cluster.")
                         chain_id_clusters = [0] * len(chains)  
                 chains = self.during_merger(chains, chain_id_clusters) # type: ignore
             chains = self.stepper.next_step_in_all(chains)
+            #for c in chains:
+            #    print(f"step {counter}, chain {c.index}, {c.get_full_text()}")
             counter += 1
+            
         
         # Post merger
         if not self.use_during_merger:
             assert self.post_merger
             assert self.clusterer
             chain_id_clusters = self.clusterer(chains, question)
+            print(f"Post merging: {chain_id_clusters=}")
             chains = self.post_merger(chains, chain_id_clusters) # type: ignore
+            print(f"Post merging: {len(chains)}, {chains[0].get_full_text() if len(chains) > 0 else 'No chains'}\n\n")
 
         return chains
 
