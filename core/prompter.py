@@ -8,10 +8,10 @@ class Prompter:
 
 
 class SimplePrompter(Prompter):
-    def __init__(self, template: Template = SIMPLE_PROMPT_TEMPLATE):
+    def __init__(self, template: Template = SIMPLE_PROMPT_TEMPLATE, folder_path=None, n_shots=0):
         self.template = template
 
-    def __call__(self, question):
+    def __call__(self, question, chain_index=0):
         return self.template.substitute(question=question)
     
 class DiversifiedCoTPrompter(Prompter):
