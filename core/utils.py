@@ -96,7 +96,7 @@ def debug_panel(logger, title, text):
 
 def get_logger():
     logging.basicConfig(
-        level=logging.CRITICAL,
+        level=logging.INFO,
         format="%(message)s",
         handlers=[RichHandler()]
     )

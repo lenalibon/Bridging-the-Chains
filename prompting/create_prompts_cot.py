@@ -21,22 +21,30 @@ DIVERSIFICATION = ["Alan Turing, the father of computer science",
 
 FEW_SHOT_PROMPT = Template(
     """{
+    <start_of_turn>user
     "question": "${example_question}",
+    <end_of_turn>
+    <start_of_turn>model
     "cot_steps": [
         ${example_cot_steps}
     ]
+    <end_of_turn>
 },
 """
 )
 
 MASTER_PROMPT = Template(
-    """You will be given math questions. Think step by step and write the \
+    """<start_of_turn>user You will be given math questions. Think step by step and write the \
 solution in JSON format like this: ["step_1", "step_2", ..., "step_n"]. \
 Every step should contain just the content of the reasoning and nothing else. \
 Use double quotes for the steps. The text of the last step needs to have the final answer at the end.
-
-${few_shot_block}{
+<end_of_turn>
+${few_shot_block}
+{
+    <start_of_turn>user
     "question": "Think like ${expert} and solve the problem. ${question}",
+    <end_of_turn>
+    <start_of_turn>model
     "cot_steps": [
 """
 )

@@ -10,6 +10,8 @@ from transformers import (  # type: ignore
     AutoModelForCausalLM,
     AutoTokenizer,
     HybridCache,
+    DynamicCache,
+    OffloadedCache
 )
 
 from core.experiment_config import ExperimentConfig
@@ -21,13 +23,14 @@ logger = get_logger()
 def prepare_pkv(model, n_input_tokens, max_steps, max_tokens_per_step):
     model_name = model.__class__.__name__
     if 'Gemma' in model_name:
-        max_cache_len = n_input_tokens + max_steps * max_tokens_per_step 
-        logger.debug(f"Preparing HybridCache for {model_name} with max_cache_len={max_cache_len}")
-        return HybridCache(config=model.config,
-                        max_batch_size=1,
-                        max_cache_len=max_cache_len,
-                        device=model.device,
-                        dtype=model.dtype)
+        # max_cache_len = n_input_tokens + max_steps * max_tokens_per_step 
+        # logger.debug(f"Preparing HybridCache for {model_name} with max_cache_len={max_cache_len}")
+        return OffloadedCache()
+        # return HybridCache(config=model.config,
+        #                 max_batch_size=1,
+        #                 max_cache_len=max_cache_len,
+        #                 device=model.device,
+        #                 dtype=model.dtype)
     else:
         return None
 
@@ -65,6 +68,7 @@ class Stepper:
             prompt: str = prompter(question, index)
         else:
             prompt: str = prompter(question)
+
         input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.config.device) # type: ignore
         prompt_offset = input_ids.shape[1]
         pkv = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step) if self.gen_config.use_cache else None
@@ -74,6 +78,7 @@ class Stepper:
                                   tokenizer=self.tokenizer,
                                   cache_implementation=None
                                   )
+        # print(self.tokenizer.decode(out['sequences'][0]))
         chain = Chain(self.tokenizer,
                       out.sequences,
                       prompt_offset=prompt_offset,
@@ -82,6 +87,7 @@ class Stepper:
                       index=index,
                       n_lines=1,
                       question=question)
+        del pkv
         self.debug_chain(chain, skip_offset=True)
         return chain
 
@@ -103,6 +109,7 @@ class Stepper:
                       index=index,
                       n_lines=1,
                       question=question)
+        del pkv
         self.debug_chain(chain, skip_offset=True)
         return chain
 
@@ -124,6 +131,7 @@ class Stepper:
                       index=index,
                       n_lines=1,
                       question=question)
+        del pkv
         self.debug_chain(chain, skip_offset=True)
         return chain
 
@@ -151,12 +159,14 @@ class Stepper:
                                   tokenizer=self.tokenizer,
                                   cache_implementation=None,
                                   )
+        print(self.tokenizer.decode(out['sequences'][0]))
         chain.pkv = out.past_key_values
         chain.token_ids = out.sequences
         # Append the new scores (tuple of tensors) to the existing scores
         chain.scores += out.scores
         assert chain.n_lines
         chain.n_lines += 1
+        del pkv
         self.debug_chain(chain, skip_offset=True)
         return chain
 

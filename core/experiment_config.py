@@ -14,7 +14,6 @@ class ExperimentConfig(TypedDict):
     merge_after: bool
     merge_every: int | bool
 
-
     dataset: str
     model_name: str
     few_shots_folder_path: str
@@ -27,18 +26,18 @@ experiment_config_data = {
     "n_init_chains": [4, 8],
     "num_samples_eval": 1,
     "max_steps": 8,
-    "max_tokens_per_step": 100,
-    "num_few_shots": 8,
+    "max_tokens_per_step": 64,
+    "num_few_shots": 4,
     "temperature": 0.7,
 
     "merge_every": 2,
     "merge_after": True,
 
     "dataset": "gsm8k",
-    "model_name": "google/gemma-3-1b-it",
+    "model_name": "google/gemma-7b",
     "few_shots_folder_path": "few-shot/gsm8k_few_shot/",
     "use_cache": True,
-    "device": "mps"
+    "device": "cuda"
 }
 
 experiment_config: ExperimentConfig = Munch.fromDict(experiment_config_data)

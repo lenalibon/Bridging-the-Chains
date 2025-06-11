@@ -1,7 +1,6 @@
 import argparse
 from functools import partial
 from pathlib import Path
-
 from core.method import BaselineAggregation, BaselineGreedy, BaselineSimple, EmbeddingMethodTest
 from core.prompter import DiversifiedCoTPrompter, SimplePrompter
 import datasets
@@ -12,6 +11,8 @@ from transformers import (  # type: ignore
     AutoModelForCausalLM,
     AutoTokenizer,
     HybridCache,
+    BitsAndBytesConfig,
+    DynamicCache
 )
 
 from core.chain import Chains
@@ -105,11 +106,17 @@ class Experiment:
         return (split, label) # type: ignore
 
     def get_model_and_tokenizer(self):
-        model_name = "google/gemma-3-1b-it"
+        # model_name = "google/gemma-3-1b-it"
         # model_name = "Qwen/Qwen2.5-0.5B-Instruct"
-        tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
-        # model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=BitsAndBytesConfig(load_in_8bit=True))
-        model = AutoModelForCausalLM.from_pretrained(model_name).to(self.config.device)
+        print("Loading model")
+        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+        tokenizer = AutoTokenizer.from_pretrained("google/gemma-7b", cache_dir="/work/scratch/imcauliffe")
+        model = AutoModelForCausalLM.from_pretrained(
+            "google/gemma-7b", 
+            cache_dir="/work/scratch/imcauliffe", 
+            quantization_config=quantization_config,
+            device_map="auto", 
+            torch_dtype=torch.float16)
         return model, tokenizer
 
 
