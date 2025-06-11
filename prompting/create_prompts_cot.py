@@ -30,11 +30,7 @@ FEW_SHOT_PROMPT = Template(
 )
 
 MASTER_PROMPT = Template(
-    """You will be given math questions. Think step by step and write the \
-solution in JSON format like this: ["step_1", "step_2", ..., "step_n"]. \
-Every step should contain just the content of the reasoning and nothing else. \
-Use double quotes for the steps. The text of the last step needs to have the final answer at the end.
-
+    """You will be given a math question and you need to answer it step by step, in JSON format. Let's think step by step.
 ${few_shot_block}{
     "question": "Think like ${expert} and solve the problem. ${question}",
     "cot_steps": [
