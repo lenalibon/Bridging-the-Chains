@@ -73,29 +73,50 @@ class Experiment:
             self.eval_experiment(experiment, eval_data, label=eval_label)
 
     def eval_experiment(self, experiment, eval_data, label="eval"):
-        Path("results").mkdir(parents=True, exist_ok=True)
-        ts = get_timestamp()
-        result_file = f"results/{label}___{ts}.jsonl"
+        results_dir = Path("results")
+        results_dir.mkdir(parents=True, exist_ok=True)
+        success_file = results_dir / "success_ids.txt"
+        error_file = results_dir / "error_ids.txt"
         
-        with open(result_file, "a", encoding="utf-8") as f:
+        success_ids = set()
+        if success_file.exists():
+            success_ids = set(line.strip() for line in success_file.open())
+        error_ids = set()
+        if error_file.exists():
+            error_ids = set(line.strip() for line in error_file.open())
+        
+        ts = get_timestamp()
+        result_file = results_dir / f"{label}___{ts}.jsonl"
+        
+        with result_file.open("a", encoding="utf-8") as f, success_file.open("a", encoding="utf-8") as sf, error_file.open("a", encoding="utf-8") as ef:
             for i, sample in enumerate(eval_data):
-                if i == 5:
+                qid = str(sample.get("id", i))
+                if qid in success_ids:
+                    print(f"Skipping already processed sample {qid}")
                     continue
                 question = sample['question']
                 true_answer = sample['answer']
-                pred_chains: Chains = experiment.generate_answer(question)
-                # NOTE: roscoe's gsm8k.json is different
-                # FIXME: only the first chain is written! I am not sure what we should do if there are more chains. -sb
-                clean_text = pred_chains[0].get_clean_text()
-                debug_panel(logger, "Predicted Answer", pred_chains[0].get_generated_text())
-                debug_panel(logger, "True Answer", true_answer)
-                result = {
-                    "premise": question,
-                    "reasoning": clean_text,
-                    "true_answer": true_answer,
-                }
-                f.write(json.dumps(result, ensure_ascii=False) + "\n")
-                clear_cache()
+                try:
+                    pred_chains: Chains = experiment.generate_answer(question)
+                    # NOTE: roscoe's gsm8k.json is different
+                    # FIXME: only the first chain is written! I am not sure what we should do if there are more chains. -sb
+                    clean_text = pred_chains[0].get_clean_text()
+                    debug_panel(logger, "Predicted Answer", pred_chains[0].get_generated_text())
+                    debug_panel(logger, "True Answer", true_answer)
+                    result = {
+                        "premise": question,
+                        "reasoning": clean_text,
+                        "true_answer": true_answer,
+                    }
+                    f.write(json.dumps(result, ensure_ascii=False) + "\n")
+                    sf.write(qid + "\n")
+                    success_ids.add(qid)
+                except Exception as e:
+                    print(f"Error processing sample {qid}: {e}")
+                    ef.write(qid + "\n")
+                    error_ids.add(qid)
+                finally:
+                    clear_cache()
         
     def get_gsm8k(self, n=None) -> tuple['Dataset', str]:
         # NOTE: using the train split for evaluation

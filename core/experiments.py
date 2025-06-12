@@ -1,5 +1,5 @@
 import math
-
+import gc
 from typing import Optional
 
 from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -102,11 +102,15 @@ class RunExperiment:
             assert self.post_merger
             assert self.clusterer
             chain_id_clusters = self.clusterer(chains, question)
-            print(f"Post merging: {chain_id_clusters=}")
+            #print(f"Post merging: {chain_id_clusters=}")
             chains = self.post_merger(chains, chain_id_clusters) # type: ignore
-            print(f"Post merging: {len(chains)}, {chains[0].get_full_text() if len(chains) > 0 else 'No chains'}\n\n")
+            #print(f"Post merging: {len(chains)}, {chains[0].get_full_text() if len(chains) > 0 else 'No chains'}\n\n")
 
         return chains
+        
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
 
 
 class ExperimentB1(RunExperiment):
