@@ -68,7 +68,7 @@ class Stepper:
         input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.config.device) # type: ignore
         prompt_offset = input_ids.shape[1]
         pkv = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step) if self.gen_config.use_cache else None
-        with torch.inference_mode():
+        with torch.torch.inference_mode():
             out = self.model.generate(input_ids, # type: ignore
                                       past_key_values=pkv,
                                       generation_config=self.gen_config,
@@ -90,7 +90,7 @@ class Stepper:
         input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.config.device) # type: ignore
         prompt_offset = input_ids.shape[1]
         pkv = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step) if self.gen_config.use_cache else None
-        with torch.inference_mode():
+        with torch.torch.inference_mode():
             out = self.model.generate(input_ids, # type: ignore
                                       past_key_values=pkv,
                                       generation_config=self.gen_config,
@@ -112,7 +112,7 @@ class Stepper:
         input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.config.device) # type: ignore
         prompt_offset = input_ids.shape[1]
         pkv = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step) if self.gen_config.use_cache else None
-        with torch.inference_mode():
+        with torch.torch.inference_mode():
             out = self.model.generate(input_ids, # type: ignore
                                       past_key_values=pkv,
                                       generation_config=self.gen_config,
@@ -148,7 +148,7 @@ class Stepper:
                                            max_tokens_per_step=self.config.max_tokens_per_step)
         else:
             pkv = None
-        with torch.inference_mode():
+        with torch.torch.inference_mode():
             out = self.model.generate(input_token_ids, # type: ignore
                                       past_key_values=pkv,
                                       generation_config=self.gen_config,
@@ -159,9 +159,8 @@ class Stepper:
         chain.token_ids = out.sequences
         # Append the new scores (tuple of tensors) to the existing scores
         if out.scores is not None:
-            cpu_scores = [s.to("cpu", non_blocking=True) for s in out.scores]
+            cpu_scores = [s.to('cpu', non_blocking=True) for s in out.scores]
             chain.scores += tuple(cpu_scores)
-        # chain.scores += out.scores
         assert chain.n_lines
         chain.n_lines += 1
         self.debug_chain(chain, skip_offset=True)
