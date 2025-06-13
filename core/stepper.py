@@ -154,7 +154,10 @@ class Stepper:
         chain.pkv = out.past_key_values
         chain.token_ids = out.sequences
         # Append the new scores (tuple of tensors) to the existing scores
-        chain.scores += out.scores
+        if out.scores is not None:
+            cpu_scores = [s.to("cpu", non_blocking=True) for s in out.scores]
+            chain.scores += tuple(cpu_scores)
+        # chain.scores += out.scores
         assert chain.n_lines
         chain.n_lines += 1
         self.debug_chain(chain, skip_offset=True)

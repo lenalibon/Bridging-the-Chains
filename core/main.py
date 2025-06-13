@@ -88,36 +88,42 @@ class Experiment:
         ts = get_timestamp()
         result_file = results_dir / f"{label}___{ts}.jsonl"
         
-        with result_file.open("a", encoding="utf-8") as f, success_file.open("a", encoding="utf-8") as sf, error_file.open("a", encoding="utf-8") as ef:
-            for i, sample in enumerate(eval_data):
-                qid = str(sample.get("id", i))
-                if qid in success_ids:
-                    print(f"Skipping already processed sample {qid}")
-                    continue
-                question = sample['question']
-                true_answer = sample['answer']
-                try:
-                    pred_chains: Chains = experiment.generate_answer(question)
-                    # NOTE: roscoe's gsm8k.json is different
-                    # FIXME: only the first chain is written! I am not sure what we should do if there are more chains. -sb
-                    clean_text = pred_chains[0].get_clean_text()
-                    debug_panel(logger, "Predicted Answer", pred_chains[0].get_generated_text())
-                    debug_panel(logger, "True Answer", true_answer)
-                    result = {
-                        "premise": question,
-                        "reasoning": clean_text,
-                        "true_answer": true_answer,
-                    }
-                    print(clean_text)
+        for i, sample in enumerate(eval_data): 
+            qid = str(sample.get("id", i))
+            if qid in success_ids:
+                print(f"Skipping already processed sample {qid}")
+                continue
+            question = sample['question']
+            true_answer = sample['answer']
+            try:
+                pred_chains: Chains = experiment.generate_answer(question)
+                # NOTE: roscoe's gsm8k.json is different
+                # FIXME: only the first chain is written! I am not sure what we should do if there are more chains. -sb
+                clean_text = pred_chains[0].get_clean_text()
+                debug_panel(logger, "Predicted Answer", pred_chains[0].get_generated_text())
+                debug_panel(logger, "True Answer", true_answer)
+                result = {
+                    "premise": question,
+                    "reasoning": clean_text,
+                    "true_answer": true_answer,
+                }
+                print(clean_text)
+                with result_file.open("a", encoding="utf-8") as f:
                     f.write(json.dumps(result, ensure_ascii=False) + "\n")
+                    f.flush()
+                
+                with success_file.open("a", encoding="utf-8") as sf:
                     sf.write(qid + "\n")
-                    success_ids.add(qid)
-                except Exception as e:
-                    print(f"Error processing sample {qid}: {e}")
+                    sf.flush()
+                success_ids.add(qid)
+            except Exception as e:
+                print(f"Error processing sample {qid}: {e}")
+                with error_file.open("a", encoding="utf-8") as ef:
                     ef.write(qid + "\n")
-                    error_ids.add(qid)
-                finally:
-                    clear_cache()
+                    ef.flush()
+                error_ids.add(qid)
+            finally:
+                clear_cache()
         
     def get_gsm8k(self, n=None) -> tuple['Dataset', str]:
         # NOTE: using the train split for evaluation
