@@ -28,9 +28,6 @@ class StopAfterIntermediateAnswer(StoppingCriteria):
 
 
 def call_gemma_entailment_api(prompt: str, config:ExperimentConfig) -> str:
-    """
-    Sends the prompt to Gemma 3 27B endpoint and returns 'Yes' or 'No' string.
-    """
     max_retries = 20
     for attempt in range(1, max_retries + 1):
         try:
