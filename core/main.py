@@ -108,6 +108,7 @@ class Experiment:
                         "reasoning": clean_text,
                         "true_answer": true_answer,
                     }
+                    print(clean_text)
                     f.write(json.dumps(result, ensure_ascii=False) + "\n")
                     sf.write(qid + "\n")
                     success_ids.add(qid)
@@ -130,11 +131,13 @@ class Experiment:
     def get_model_and_tokenizer(self):
         tokenizer = AutoTokenizer.from_pretrained(self.config.model_name, padding_side='left')
         # model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=BitsAndBytesConfig(load_in_8bit=True))
-        model = AutoModelForCausalLM.from_pretrained(self.config.model_name).to(self.config.device)
+        model = AutoModelForCausalLM.from_pretrained(
+            self.config.model_name,
+            torch_dtype=torch.float32,
+            device_map="auto",
+            token=self.config.hf_token
+        ).to(self.config.device)
         return model, tokenizer
-
-
-
 
 
 # Usage: python -m core.main
