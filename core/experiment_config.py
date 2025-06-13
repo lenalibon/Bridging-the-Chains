@@ -27,7 +27,7 @@ experiment_config_data = {
     "experiment_id": 'B1', #['B1', 'N1', 'N2', 'N3', 'M1', 'M2', 'M3'],
     "prompter": 'diversified_cot', #['simple', 'diversified_cot']
     "n_init_chains": 7,
-    "num_samples_eval": None,
+    "num_samples_eval": 10,
     "max_steps": 7,
     "max_tokens_per_step": 2000,
     "num_few_shots": 1,

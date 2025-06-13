@@ -18,18 +18,24 @@ from .utils import *
 
 logger = get_logger()
 
-def prepare_pkv(model, n_input_tokens, max_steps, max_tokens_per_step):
+def prepare_pkv(model, n_input_tokens, max_steps, max_tokens_per_step, device): # Add device parameter
     model_name = model.__class__.__name__
     if 'Gemma' in model_name:
         max_cache_len = n_input_tokens + max_steps * max_tokens_per_step 
-        logger.debug(f"Preparing HybridCache for {model_name} with max_cache_len={max_cache_len}")
+        logger.debug(f"Preparing HybridCache for {model_name} with max_cache_len={max_cache_len} on device={device}")
         return HybridCache(config=model.config,
                         max_batch_size=1,
                         max_cache_len=max_cache_len,
-                        device=model.device,
+                        device=device,  # <-- Use the parameter
                         dtype=model.dtype)
     else:
         return None
+
+def move_hybrid_cache(pkv, model, device, n_input_tokens, max_steps, max_tokens_per_step):
+    if isinstance(pkv, HybridCache):
+        return prepare_pkv(model, n_input_tokens, max_steps, max_tokens_per_step, device=device)
+
+    return pkv.to(device) if hasattr(pkv, 'to') else pkv
 
 
 class Stepper:
@@ -67,8 +73,11 @@ class Stepper:
             prompt: str = prompter(question)
         input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.config.device) # type: ignore
         prompt_offset = input_ids.shape[1]
-        pkv = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step) if self.gen_config.use_cache else None
-        with torch.torch.inference_mode():
+        pkv = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step, device='cpu') if self.gen_config.use_cache else None
+        if pkv is not None:
+            pkv = move_hybrid_cache(pkv, self.model, self.config.device, input_ids.shape[1],
+                                    self.config.max_steps, self.config.max_tokens_per_step)
+        with torch.inference_mode():
             out = self.model.generate(input_ids, # type: ignore
                                       past_key_values=pkv,
                                       generation_config=self.gen_config,
@@ -89,8 +98,11 @@ class Stepper:
     def first_step_in_one_summarization(self, prompt: str, index: Optional[int] = None, question: Optional[str] = None) -> Chain:
         input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.config.device) # type: ignore
         prompt_offset = input_ids.shape[1]
-        pkv = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step) if self.gen_config.use_cache else None
-        with torch.torch.inference_mode():
+        pkv = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step, device='cpu') if self.gen_config.use_cache else None
+        if pkv is not None:
+            pkv = move_hybrid_cache(pkv, self.model, self.config.device, input_ids.shape[1],
+                                    self.config.max_steps, self.config.max_tokens_per_step)
+        with torch.inference_mode():
             out = self.model.generate(input_ids, # type: ignore
                                       past_key_values=pkv,
                                       generation_config=self.gen_config,
@@ -111,8 +123,11 @@ class Stepper:
     def first_step_in_one_summarization(self, prompt: str, index: Optional[int] = None, question: Optional[str] = None) -> Chain:
         input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.config.device) # type: ignore
         prompt_offset = input_ids.shape[1]
-        pkv = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step) if self.gen_config.use_cache else None
-        with torch.torch.inference_mode():
+        pkv = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step, device='cpu') if self.gen_config.use_cache else None
+        if pkv is not None:
+            pkv = move_hybrid_cache(pkv, self.model, self.config.device, input_ids.shape[1],
+                                    self.config.max_steps, self.config.max_tokens_per_step)
+        with torch.inference_mode():
             out = self.model.generate(input_ids, # type: ignore
                                       past_key_values=pkv,
                                       generation_config=self.gen_config,
@@ -143,24 +158,31 @@ class Stepper:
     def next_step_in_one(self, chain: Chain) -> Chain:
         input_token_ids = chain.token_ids
         if self.gen_config.use_cache:
+            # Get the pkv from the chain (which should be on CPU)
             pkv = chain.pkv or prepare_pkv(self.model, input_token_ids.shape[1], 
                                            max_steps=self.config.max_steps-chain.n_lines, 
-                                           max_tokens_per_step=self.config.max_tokens_per_step)
+                                           max_tokens_per_step=self.config.max_tokens_per_step,
+                                           device='cpu') # <-- specify device
         else:
             pkv = None
-        with torch.torch.inference_mode():
+        if pkv is not None:
+            pkv = move_hybrid_cache(pkv, self.model, self.config.device, input_token_ids.shape[1],
+                                    self.config.max_steps, self.config.max_tokens_per_step)
+        with torch.inference_mode():
             out = self.model.generate(input_token_ids, # type: ignore
                                       past_key_values=pkv,
                                       generation_config=self.gen_config,
                                       tokenizer=self.tokenizer,
                                       cache_implementation=None,
                                       )
-        chain.pkv = out.past_key_values
+        if out.past_key_values is not None:
+            chain.pkv = move_hybrid_cache(out.past_key_values, self.model, 'cpu', input_token_ids.shape[1],
+                                          self.config.max_steps, self.config.max_tokens_per_step)
         chain.token_ids = out.sequences
-        # Append the new scores (tuple of tensors) to the existing scores
         if out.scores is not None:
-            cpu_scores = [s.to('cpu', non_blocking=True) for s in out.scores]
+            cpu_scores = [s.to("cpu", non_blocking=True) for s in out.scores]
             chain.scores += tuple(cpu_scores)
+        # chain.scores += out.scores
         assert chain.n_lines
         chain.n_lines += 1
         self.debug_chain(chain, skip_offset=True)

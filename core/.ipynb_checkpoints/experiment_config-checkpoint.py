@@ -28,9 +28,9 @@ experiment_config_data = {
     "prompter": 'diversified_cot', #['simple', 'diversified_cot']
     "n_init_chains": 7,
     "num_samples_eval": 10,
-    "max_steps": 5,
+    "max_steps": 7,
     "max_tokens_per_step": 2000,
-    "num_few_shots": 2,
+    "num_few_shots": 1,
     "temperature": 0.7,
 
     "merge_every": 2,
