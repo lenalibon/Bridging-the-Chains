@@ -15,6 +15,7 @@ from transformers import (  # type: ignore
 from core.experiment_config import ExperimentConfig
 from .prompter import Prompter
 from .utils import *
+import gc
 
 logger = get_logger()
 
@@ -63,6 +64,17 @@ class Stepper:
         # NOTE: On the difference between `scores` and `logits`,
         # see https://huggingface.co/docs/transformers/v4.51.3/en/internal/generation_utils#transformers.generation.GenerateDecoderOnlyOutput
 
+    def _clear_memory(self, *args):
+        """Helper to explicitly delete variables and free CPU/GPU memory."""
+        for var in args:
+            try:
+                del var
+            except NameError:
+                pass
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
     def first_step_in_all(self, prompter: 'Prompter', n = 1, **kw) -> ListChains:
         return ListChains.from_list([self.first_step_in_one(prompter, index=index, **kw) for index in range(n)])
 
@@ -71,27 +83,48 @@ class Stepper:
             prompt: str = prompter(question, index)
         else:
             prompt: str = prompter(question)
-        input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.config.device) # type: ignore
+    
+        input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids
         prompt_offset = input_ids.shape[1]
-        pkv = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step, device='cpu') if self.gen_config.use_cache else None
-        if pkv is not None:
-            pkv = move_hybrid_cache(pkv, self.model, self.config.device, input_ids.shape[1],
-                                    self.config.max_steps, self.config.max_tokens_per_step)
+    
+        pkv_gpu = None
+        if self.gen_config.use_cache:
+            pkv_gpu = prepare_pkv(self.model, prompt_offset, self.config.max_steps, self.config.max_tokens_per_step, device=self.config.device)
+    
+        # --- GPU Operations ---
         with torch.inference_mode():
-            out = self.model.generate(input_ids, # type: ignore
-                                      past_key_values=pkv,
-                                      generation_config=self.gen_config,
-                                      tokenizer=self.tokenizer,
-                                      cache_implementation=None
-                                      )
-            chain = Chain(self.tokenizer,
-                          out.sequences,
-                          prompt_offset=prompt_offset,
-                          scores=out.scores,
-                          pkv=out.past_key_values,
-                          index=index,
-                          n_lines=1,
-                          question=question)
+            input_ids_gpu = input_ids.to(self.config.device)
+            out = self.model.generate(
+                input_ids_gpu,
+                past_key_values=pkv_gpu,
+                generation_config=self.gen_config,
+                tokenizer=self.tokenizer
+            )
+            # Immediately move results to CPU
+            sequences_cpu = out.sequences.to('cpu')
+            scores_cpu = tuple(s.to('cpu', dtype=torch.float16) for s in out.scores) # Use float16 for scores to save memory
+            pkv_cpu = None
+            if out.past_key_values is not None:
+                pkv_cpu = move_hybrid_cache(out.past_key_values, self.model, 'cpu', out.sequences.shape[1],
+                                            self.config.max_steps, self.config.max_tokens_per_step)
+    
+        # --- Explicit Cleanup ---
+        # Delete all large temporary variables that were on the GPU
+        del input_ids_gpu
+        del pkv_gpu
+        del out
+        gc.collect()
+        torch.cuda.empty_cache()
+    
+        chain = Chain(self.tokenizer,
+                      sequences_cpu,
+                      prompt_offset=prompt_offset,
+                      scores=scores_cpu,
+                      pkv=pkv_cpu,
+                      index=index,
+                      n_lines=1,
+                      question=question)
+    
         self.debug_chain(chain, skip_offset=True)
         return chain
 
@@ -156,35 +189,45 @@ class Stepper:
             return self.next_step_in_one(chain)
 
     def next_step_in_one(self, chain: Chain) -> Chain:
+        # Get necessary data from the chain (all on CPU)
         input_token_ids = chain.token_ids
-        if self.gen_config.use_cache:
-            # Get the pkv from the chain (which should be on CPU)
-            pkv = chain.pkv or prepare_pkv(self.model, input_token_ids.shape[1], 
-                                           max_steps=self.config.max_steps-chain.n_lines, 
-                                           max_tokens_per_step=self.config.max_tokens_per_step,
-                                           device='cpu') # <-- specify device
-        else:
-            pkv = None
-        if pkv is not None:
-            pkv = move_hybrid_cache(pkv, self.model, self.config.device, input_token_ids.shape[1],
-                                    self.config.max_steps, self.config.max_tokens_per_step)
+        pkv_cpu = chain.pkv
+    
+        pkv_gpu = None
+        if self.gen_config.use_cache and pkv_cpu:
+            pkv_gpu = move_hybrid_cache(pkv_cpu, self.model, self.config.device, input_token_ids.shape[1],
+                                        self.config.max_steps, self.config.max_tokens_per_step)
+    
+        # --- GPU Operations ---
         with torch.inference_mode():
-            out = self.model.generate(input_token_ids, # type: ignore
-                                      past_key_values=pkv,
-                                      generation_config=self.gen_config,
-                                      tokenizer=self.tokenizer,
-                                      cache_implementation=None,
-                                      )
-        if out.past_key_values is not None:
-            chain.pkv = move_hybrid_cache(out.past_key_values, self.model, 'cpu', input_token_ids.shape[1],
-                                          self.config.max_steps, self.config.max_tokens_per_step)
-        chain.token_ids = out.sequences
-        if out.scores is not None:
-            cpu_scores = [s.to("cpu", non_blocking=True) for s in out.scores]
-            chain.scores += tuple(cpu_scores)
-        # chain.scores += out.scores
-        assert chain.n_lines
+            input_token_ids_gpu = input_token_ids.to(self.config.device)
+            out = self.model.generate(
+                input_token_ids_gpu,
+                past_key_values=pkv_gpu,
+                generation_config=self.gen_config,
+                tokenizer=self.tokenizer
+            )
+            # Immediately move results to CPU
+            new_sequences_cpu = out.sequences.to('cpu')
+            new_scores_cpu = tuple(s.to("cpu", dtype=torch.float16) for s in out.scores)
+            new_pkv_cpu = None
+            if out.past_key_values is not None:
+                new_pkv_cpu = move_hybrid_cache(out.past_key_values, self.model, 'cpu', out.sequences.shape[1],
+                                              self.config.max_steps, self.config.max_tokens_per_step)
+    
+        # --- Explicit Cleanup ---
+        del input_token_ids_gpu
+        del pkv_gpu
+        del out
+        gc.collect()
+        torch.cuda.empty_cache()
+    
+        # Update the chain object with the new state from CPU tensors
+        chain.pkv = new_pkv_cpu
+        chain.token_ids = new_sequences_cpu
+        chain.scores += new_scores_cpu
         chain.n_lines += 1
+        
         self.debug_chain(chain, skip_offset=True)
         return chain
 

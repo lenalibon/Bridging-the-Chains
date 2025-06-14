@@ -140,6 +140,30 @@ class Chain:
 
     def __hash__(self):
         return hash_tensor(self.token_ids)
+
+    def release_memory(self):
+        """
+        Explicitly delete tensors to release memory.
+        Call this after you're done using the Chain object.
+        """
+        try:
+            del self.token_ids
+        except AttributeError:
+            pass
+        try:
+            del self.scores
+        except AttributeError:
+            pass
+        try:
+            del self.pkv
+        except AttributeError:
+            pass
+
+        import gc
+        import torch
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         
 
 class Chains:

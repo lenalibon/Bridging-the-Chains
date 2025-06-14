@@ -107,7 +107,7 @@ class Experiment:
                     "reasoning": clean_text,
                     "true_answer": true_answer,
                 }
-                print(clean_text)
+                #print(clean_text)
                 with result_file.open("a", encoding="utf-8") as f:
                     f.write(json.dumps(result, ensure_ascii=False) + "\n")
                     f.flush()
@@ -116,6 +116,11 @@ class Experiment:
                     sf.write(qid + "\n")
                     sf.flush()
                 success_ids.add(qid)
+
+                for chain in pred_chains:
+                    chain.release_memory()
+                del pred_chains, clean_text, question, true_answer
+                clear_cache()
             except Exception as e:
                 print(f"Error processing sample {qid}: {e}")
                 with error_file.open("a", encoding="utf-8") as ef:
@@ -139,7 +144,7 @@ class Experiment:
         # model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=BitsAndBytesConfig(load_in_8bit=True))
         model = AutoModelForCausalLM.from_pretrained(
             self.config.model_name,
-            torch_dtype=torch.float32,
+            torch_dtype=torch.bfloat16,
             device_map="auto",
             token=self.config.hf_token
         ).to(self.config.device)
