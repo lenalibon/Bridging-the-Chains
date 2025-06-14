@@ -57,6 +57,8 @@ class Experiment:
         self.config = config
 
     def eval(self, **kwargs):
+        login(token=self.config.hf_token)
+
         logger.info("Running full evaluation...")
         # NOTE: A DataGetter is a function that returns a tuple with dataset and its label.
         # We might want to consider a wrapper class around datasets.Dataset instead.
