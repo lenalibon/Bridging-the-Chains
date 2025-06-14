@@ -119,9 +119,9 @@ class ReasoningEvaluator(Evaluator):
         with open(in_file) as _f:
             for line in _f:
                 jline = json.loads(line)
-                h_chain = ReasoningSteps(line=jline["answer"], type="gsm8k_hypo")
-                context = ReasoningSteps(line=jline["question"])
-                r_chain = ReasoningSteps(line=jline["ground_truth"], type="gsm8k_ref")
+                h_chain = ReasoningSteps(line=jline["reasoning"], type="gsm8k_hypo")
+                context = ReasoningSteps(line=jline["premise"])
+                r_chain = ReasoningSteps(line=jline["true_answer"], type="gsm8k_ref")
 
                 hypothesises.append(h_chain)
                 contexts.append(context)

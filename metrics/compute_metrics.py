@@ -54,7 +54,7 @@ def run_f1_score(input_path):
 
     evaluator = F1ScoreEvaluator()
     results = evaluator.evaluate(input_path)
-    output_file = input_path.replace(".json", "_f1_results.jsonl")
+    output_file = input_path.replace(".json", "_f1_results.json")
 
     with open(output_file, "w", encoding="utf-8") as f:
         for item in results:
