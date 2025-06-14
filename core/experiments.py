@@ -9,7 +9,7 @@ from clustering.entailment import EntailmentCluster
 from core.chain import Chains, ListChains
 from core.clusterer import Clusterer, TrivialClusterer
 from core.experiment_config import ExperimentConfig
-from core.merger import Merger, MergerClusterCentroid, MergerMaxProb, SummarizingMergeFunction, TrivialMergeFunction, MergerWithinCluster
+from core.merger import Merger, MergerClusterCentroid, MergerMaxProb, SummarizingMergeFunction, TrivialMergeFunction, MergerWithinCluster, MergerMajorityThenMaxProb
 from core.prompter import Prompter
 from core.stepper import Stepper # type: ignore
 
@@ -150,7 +150,7 @@ class ExperimentN3(RunExperiment):
     def __init__(self, model, tokenizer, prompter, config, **kwargs):
         super().__init__(model, tokenizer, prompter, config,
                          clusterer=EntailmentCluster(config, model, tokenizer),
-                         post_merger=MergerMajorityThenMaxProb(),
+                         post_merger=MergerMajorityThenMaxProb(SummarizingMergeFunction(model, tokenizer, config)),
                          label="ExperimentN3",
                          n_init_chains=config.n_init_chains
         )
