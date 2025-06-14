@@ -91,7 +91,7 @@ class Experiment:
         for i, sample in enumerate(eval_data): 
             qid = str(sample.get("id", i))
             if qid in success_ids:
-                print(f"Skipping already processed sample {qid}")
+                # print(f"Skipping already processed sample {qid}")
                 continue
             question = sample['question']
             true_answer = sample['answer']
