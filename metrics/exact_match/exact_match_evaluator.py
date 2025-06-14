@@ -42,9 +42,9 @@ class ExactMatchEvaluator:
 
         for line in tqdm(lines, desc="Evaluating", unit="example"):
             item = json.loads(line)
-            problem = item['question']
-            answer = item['answer']
-            ground_truth = item['ground_truth']
+            problem = item['premise']
+            answer = item['reasoning']
+            ground_truth = item['true_answer']
 
             predicted = self.evaluate_answer(problem, answer, ground_truth)
 

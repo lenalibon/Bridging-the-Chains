@@ -21,9 +21,9 @@ class BertScoreEvaluator:
 
         for line in tqdm(lines, desc="Evaluating", unit="example"):
             item = json.loads(line)
-            question = item.get('question', '')
-            answer = item['answer']
-            ground_truth = item['ground_truth']
+            question = item['premise']
+            answer = item['reasoning']
+            ground_truth = item['true_answer']
 
             similarity = self.evaluate_answer(answer, ground_truth)
 

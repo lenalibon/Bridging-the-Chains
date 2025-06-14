@@ -38,9 +38,9 @@ class F1ScoreEvaluator:
 
         for line in tqdm(lines, desc="Evaluating F1", unit="example"):
             item = json.loads(line)
-            problem = item['question']
-            answer = item['answer']
-            ground_truth = item['ground_truth']
+            problem = item['premise']
+            answer = item['reasoning']
+            ground_truth = item['true_answer']
             f1_score = self.evaluate_answer(problem, answer, ground_truth)
 
             results.append({
