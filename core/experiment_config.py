@@ -22,12 +22,13 @@ class ExperimentConfig(TypedDict):
     
     nli_model_name: str # name of the NLI model to use for entailment, e.g. "cross-encoder/nli-deberta-v3-large"
     embedding_model_name: str # name of the embedding model to use for clustering, e.g. "bert-base-uncased"
-
+    gemma_api_key: str # API key for the Gemma model, if applicable
+    
 experiment_config_data = {
-    "experiment_id": 'B1', #['B1', 'N1', 'N2', 'N3', 'M1', 'M2', 'M3'],
+    "experiment_id": 'N1', #['B1', 'N1', 'N2', 'N3', 'M1', 'M2', 'M3'],
     "prompter": 'diversified_cot', #['simple', 'diversified_cot']
     "n_init_chains": 7,
-    "num_samples_eval": 1000,
+    "num_samples_eval": 512,
     "max_steps": 7,
     "max_tokens_per_step": 2000,
     "num_few_shots": 1,
@@ -42,7 +43,8 @@ experiment_config_data = {
     "device": "cuda",
     
     "nli_model_name": "cross-encoder/nli-deberta-v3-large",  
-    "embedding_model_name": "bert-base-uncased"
+    "embedding_model_name": "bert-base-uncased",
+    "gemma_api_key": "TODO: fill in"
 }
 
 experiment_config: ExperimentConfig = Munch.fromDict(experiment_config_data)
