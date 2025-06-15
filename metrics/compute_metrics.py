@@ -92,7 +92,7 @@ if __name__ == "__main__":
     parser.add_argument("--suffix", type=str, default="json")
     parser.add_argument("--metrics", nargs="+", choices=["bert", "f1", "llm", "em", "roscoe"], help="List of metrics to run")
     parser.add_argument("--model-type", type=str, default=SENT_TRANS)
-    parser.add_argument("--model-name", type=str, default="all-MiniLM-L6-v2")
+    parser.add_argument("--model-name", type=str, default="all-mpnet-base-v2")
     parser.add_argument("--discourse-batch", type=int, default=64)
     parser.add_argument("--coherence-batch", type=int, default=16)
     parser.add_argument("--roscoe-scores", nargs="*", default=REASONING_SCORES)
