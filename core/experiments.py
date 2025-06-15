@@ -9,7 +9,7 @@ from clustering.entailment import EntailmentCluster
 from core.chain import Chains, ListChains
 from core.clusterer import Clusterer, TrivialClusterer
 from core.experiment_config import ExperimentConfig
-from core.merger import Merger, MergerClusterCentroid, MergerMaxProb, SummarizingMergeFunction, TrivialMergeFunction, MergerWithinCluster, MergerMajorityThenMaxProb
+from core.merger import Merger, MergerClusterCentroid, MergerMajorityThenCentroid, MergerMaxProb, SummarizingMergeFunction, TrivialMergeFunction, MergerWithinCluster, MergerMajorityThenMaxProb
 from core.prompter import Prompter
 from core.stepper import Stepper # type: ignore
 
@@ -183,7 +183,7 @@ class ExperimentM3(RunExperiment):
         clusterer = EmbeddingCluster(config)
         super().__init__(model, tokenizer, prompter, config,
                          clusterer=clusterer,
-                         post_merger=MergerMajorityThenCentroid(clusterer=clusterer),
+                         post_merger=MergerMajorityThenCentroid(merge_fn= SummarizingMergeFunction(model, tokenizer, config),clusterer=clusterer),
                          label="ExperimentM3",
                          n_init_chains=config.n_init_chains
         )
