@@ -29,7 +29,7 @@ def run_roscoe(input_path, model_name, model_type, scores, discourse_batch, cohe
 
     evaluator.update_evaluator(input_path)
     file_scores = evaluator.evaluate(score_types=scores)
-    output_file = input_path.replace(".json", "_roscoe_results.tsv")
+    output_file = input_path.replace(".jsonl", "_roscoe_results.tsv")
     save_scores(file_scores, output_file)
     print_and_reset_max_gpu_memory()
 
@@ -92,7 +92,7 @@ if __name__ == "__main__":
     parser.add_argument("--suffix", type=str, default="json")
     parser.add_argument("--metrics", nargs="+", choices=["bert", "f1", "llm", "em", "roscoe"], help="List of metrics to run")
     parser.add_argument("--model-type", type=str, default=SENT_TRANS)
-    parser.add_argument("--model-name", type=str, default="all-mpnet-base-v2")
+    parser.add_argument("--model-name", type=str, default="all-MiniLM-L6-v2")
     parser.add_argument("--discourse-batch", type=int, default=64)
     parser.add_argument("--coherence-batch", type=int, default=16)
     parser.add_argument("--roscoe-scores", nargs="*", default=REASONING_SCORES)
