@@ -5,15 +5,19 @@ import os
 import json
 from dotenv import load_dotenv
 
-from llm_comparison.llm_comparison_evaluator import LLMComparisonEvaluator 
+#from llm_comparison.llm_comparison_evaluator import LLMComparisonEvaluator 
 from f1_score.f1_score_evaluator import F1ScoreEvaluator
-from bert.bert_score_evaluator import BertScoreEvaluator
+#from bert.bert_score_evaluator import BertScoreEvaluator
 from exact_match.exact_match_evaluator import ExactMatchEvaluator
 from roscoe.roscoe import ReasoningEvaluator
-from roscoe.score import SENT_TRANS
 from roscoe.utils import save_scores, print_and_reset_max_gpu_memory
+from roscoe.score import (
+    REASONING_SCORES,
+    SENT_TRANS,
+)
 
-def run_roscoe(input_path, output_path, model_name, model_type, datasets, suffix, scores, discourse_batch, coherence_batch):
+def run_roscoe(input_path, model_name, model_type, scores, discourse_batch, coherence_batch):
+    print(f"Running Roscoe on {input_path}")
     evaluator = ReasoningEvaluator(
         score_types=scores,
         model_type=model_type,
@@ -23,22 +27,14 @@ def run_roscoe(input_path, output_path, model_name, model_type, datasets, suffix
         coherence_batch=coherence_batch,
     )
 
-    for root, _, files in os.walk(input_path):
-        for fname in files:
-            if not fname.endswith(suffix) or not any(fname.startswith(d) for d in datasets):
-                continue
-
-            in_file = os.path.join(root, fname)
-            out_file = os.path.join(output_path, model_name, f"scores_{fname.split('.')[0]}.tsv")
-            os.makedirs(os.path.dirname(out_file), exist_ok=True)
-
-            print(f"Running Roscoe on {fname}")
-            evaluator.update_evaluator(in_file)
-            file_scores = evaluator.evaluate(score_types=scores)
-            save_scores(file_scores, out_file)
-            print_and_reset_max_gpu_memory()
+    evaluator.update_evaluator(input_path)
+    file_scores = evaluator.evaluate(score_types=scores)
+    output_file = input_path.replace(".json", "_roscoe_results.tsv")
+    save_scores(file_scores, output_file)
+    print_and_reset_max_gpu_memory()
 
 def run_bert_score(input_path):
+    """
     print(f"Running BERTScore on {input_path}")
     
     evaluator = BertScoreEvaluator()
@@ -49,6 +45,7 @@ def run_bert_score(input_path):
             f.write(json.dumps(item) + "\n")
 
     print(f"BertScore results written to {output_file}")
+    """
 
 def run_f1_score(input_path):
     print(f"Running F1 score on {input_path}")
@@ -63,6 +60,7 @@ def run_f1_score(input_path):
     print(f"F1 score results written to {output_file}")
 
 def run_llm_comparison(input_path):
+    """
     print(f"Running LLM Comparison evaluation on {input_path}")
     evaluator = LLMComparisonEvaluator(model="gemma-3-27b-it")
     results = evaluator.evaluate(input_path)
@@ -73,6 +71,7 @@ def run_llm_comparison(input_path):
             f.write(json.dumps(item) + "\n")
 
     print(f"LLM Comparison results written to {output_file}")
+    """
 
 def run_exact_match(input_path):
     print(f"Running Exact Match evaluation on {input_path}")
@@ -93,10 +92,10 @@ if __name__ == "__main__":
     parser.add_argument("--suffix", type=str, default="json")
     parser.add_argument("--metrics", nargs="+", choices=["bert", "f1", "llm", "em", "roscoe"], help="List of metrics to run")
     parser.add_argument("--model-type", type=str, default=SENT_TRANS)
-    parser.add_argument("--model-name", type=str, default="facebook/roscoe-512-roberta-base")
+    parser.add_argument("--model-name", type=str, default="all-mpnet-base-v2")
     parser.add_argument("--discourse-batch", type=int, default=64)
     parser.add_argument("--coherence-batch", type=int, default=16)
-    parser.add_argument("--roscoe-scores", nargs="*", default=["fluency", "coherence", "discourse", "relevance"])
+    parser.add_argument("--roscoe-scores", nargs="*", default=REASONING_SCORES)
 
     args = parser.parse_args()
     load_dotenv()
@@ -124,11 +123,8 @@ if __name__ == "__main__":
     if "roscoe" in args.metrics:
         run_roscoe(
             input_path=fpath,
-            output_path=args.output_path,
             model_name=args.model_name,
             model_type=args.model_type,
-            datasets=[],
-            suffix=args.suffix,
             scores=args.roscoe_scores,
             discourse_batch=args.discourse_batch,
             coherence_batch=args.coherence_batch,

@@ -962,6 +962,7 @@ class Evaluator:
         Score each reasoning chain.
         """
         score_types = score_types if score_types is not None else self.score_types
+        print('score_types', score_types)
         # scores[score_type] = [score_chain1, score_chain2, ...]
         scores = defaultdict(list)
 
@@ -981,6 +982,7 @@ class Evaluator:
 
             if contains_embedding_scores(score_types):
                 # Calculate all embedding-based scores
+                print('1')
                 scores = self.compute_embedding_scores(
                     hypo=self.hypos[i],
                     context=self.context[i],
@@ -990,6 +992,7 @@ class Evaluator:
                 )
 
             if contains_nli_scores(score_types):
+                print('2')
                 scores = self.compute_nli_scores(
                     hypo=self.hypos[i],
                     context=self.context[i],
@@ -998,6 +1001,7 @@ class Evaluator:
                 )
 
             if contains_ppl_scores(score_types):
+                print('3')
                 ppl_scores = self.compute_ppl_scores(
                     hypo=self.hypos[i],
                     score_types=score_types,
@@ -1007,6 +1011,7 @@ class Evaluator:
 
             # grammar acceptability classifier models
             if contains_grammar_scores(score_types):
+                print('4')
                 grammar_scores = self.compute_grammar_scores(
                     hypo=self.hypos[i],
                     score_types=score_types,

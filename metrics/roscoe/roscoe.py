@@ -49,9 +49,7 @@ class ReasoningSteps(Chain):
         Returns list of steps in reasoning chain.
         """
         if type == "gsm8k_ref":
-            return chain.split("IGNORE THIS. Ground truth here for reference. ")[
-                1
-            ].split('\n')
+            return chain.split('\n')
         elif type == "gsm8k_hypo":
             return split_gsm8k_gpt3_generations_to_steps(reasoning=chain)
         elif type == "regular":
@@ -129,6 +127,9 @@ class ReasoningEvaluator(Evaluator):
         super().set_hypos(hypothesises)
         super().set_context(contexts)
         super().set_references(refs)
+        print('hypo', len(hypothesises))
+        print('contexts', len(contexts))
+        print('refs', len(refs))
 
 
 if __name__ == '__main__':
