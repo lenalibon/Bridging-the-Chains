@@ -28,9 +28,9 @@ class BertScoreEvaluator:
             similarity = self.evaluate_answer(answer, ground_truth)
 
             results.append({
-                "question": question,
-                "answer": answer,
-                "ground_truth": ground_truth,
+                "premise": question,
+                "reasoning": answer,
+                "true_answer": ground_truth,
                 "similarity": similarity
             })
         

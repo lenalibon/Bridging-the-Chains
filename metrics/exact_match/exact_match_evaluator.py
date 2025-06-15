@@ -31,9 +31,10 @@ class ExactMatchEvaluator:
             )
             result_text = response.text.strip().lower()
             return result_text.endswith("yes.") or result_text.endswith("yes")
+
         except Exception as e:
             print("Error in parsing:", e)
-            return False
+            return None
     
     def evaluate(self, input_file: str):
         results = []
@@ -46,10 +47,14 @@ class ExactMatchEvaluator:
             answer = item['reasoning']
             ground_truth = item['true_answer']
 
-            predicted = self.evaluate_answer(problem, answer, ground_truth)
+            predicted = None
+            while predicted == None:
+                predicted = self.evaluate_answer(problem, answer, ground_truth)
 
             results.append({
-                "question": item.get("question", ""),
+                "premise": problem ,
+                "reasoning": answer,
+                "true_answer": ground_truth,
                 "predicted": predicted
             })
         

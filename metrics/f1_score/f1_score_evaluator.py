@@ -44,7 +44,9 @@ class F1ScoreEvaluator:
             f1_score = self.evaluate_answer(problem, answer, ground_truth)
 
             results.append({
-                "question": item.get("question", ""),
+                "premise": item.get("premise", ""),
+                "reasoning": answer,
+                'true_answer': ground_truth,
                 "f1": f1_score
             })
 

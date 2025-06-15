@@ -42,7 +42,7 @@ def run_bert_score(input_path):
     
     evaluator = BertScoreEvaluator()
     results = evaluator.evaluate(input_path)
-    output_file = input_path.replace(".json", "_bert_score_results.jsonl")
+    output_file = input_path.replace(".json", "_bert_score_results.json")
     with open(output_file, "w", encoding="utf-8") as f:
         for item in results:
             f.write(json.dumps(item) + "\n")
@@ -66,7 +66,7 @@ def run_exact_match(input_path):
     evaluator = ExactMatchEvaluator(model="gemma-3-27b-it")
     results = evaluator.evaluate(input_path)
 
-    output_file = input_path.replace(".json", "_em_results.jsonl")
+    output_file = input_path.replace(".json", "_em_results.json")
     with open(output_file, "w", encoding="utf-8") as f:
         for item in results:
             f.write(json.dumps(item) + "\n")
