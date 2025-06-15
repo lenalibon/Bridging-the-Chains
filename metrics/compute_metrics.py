@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from llm_comparison.llm_comparison_evaluator import LLMComparisonEvaluator 
 from f1_score.f1_score_evaluator import F1ScoreEvaluator
 from bert.bert_score_evaluator import BertScoreEvaluator
+from exact_match.exact_match_evaluator import ExactMatchEvaluator
 from roscoe.roscoe import ReasoningEvaluator
 from roscoe.score import SENT_TRANS
 from roscoe.utils import save_scores, print_and_reset_max_gpu_memory
@@ -62,11 +63,23 @@ def run_f1_score(input_path):
     print(f"F1 score results written to {output_file}")
 
 def run_llm_comparison(input_path):
-    print(f"Running LLM comparison evaluation on {input_path}")
+    print(f"Running LLM Comparison evaluation on {input_path}")
     evaluator = LLMComparisonEvaluator(model="gemma-3-27b-it")
     results = evaluator.evaluate(input_path)
 
     output_file = input_path.replace(".json", "_llm_comparison_results.json")
+    with open(output_file, "w", encoding="utf-8") as f:
+        for item in results:
+            f.write(json.dumps(item) + "\n")
+
+    print(f"LLM Comparison results written to {output_file}")
+
+def run_exact_match(input_path):
+    print(f"Running Exact Match evaluation on {input_path}")
+    evaluator = ExactMatchEvaluator()
+    results = evaluator.evaluate(input_path)
+
+    output_file = input_path.replace(".json", "_em_results.json")
     with open(output_file, "w", encoding="utf-8") as f:
         for item in results:
             f.write(json.dumps(item) + "\n")
@@ -78,7 +91,7 @@ if __name__ == "__main__":
     parser.add_argument("--input-path", type=str, required=True, help="Path to a single JSON file")
     parser.add_argument("--output-path", type=str, default="./roscoe/")
     parser.add_argument("--suffix", type=str, default="json")
-    parser.add_argument("--metrics", nargs="+", choices=["bert", "f1", "llm", "roscoe"], help="List of metrics to run")
+    parser.add_argument("--metrics", nargs="+", choices=["bert", "f1", "llm", "em", "roscoe"], help="List of metrics to run")
     parser.add_argument("--model-type", type=str, default=SENT_TRANS)
     parser.add_argument("--model-name", type=str, default="facebook/roscoe-512-roberta-base")
     parser.add_argument("--discourse-batch", type=int, default=64)
@@ -104,6 +117,9 @@ if __name__ == "__main__":
 
     if "llm" in args.metrics:
         run_llm_comparison(fpath)
+    
+    if "em" in args.metrics:
+        run_exact_match(fpath)
 
     if "roscoe" in args.metrics:
         run_roscoe(
