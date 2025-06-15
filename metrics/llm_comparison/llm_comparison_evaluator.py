@@ -14,7 +14,7 @@ Answer: {answer}
 Ground truth: {ground_truth}
 """
 
-class ExactMatchEvaluator:
+class LLMComparisonEvaluator:
     def __init__(self, model : str = "gemma-3-27b-it"):
         self.__client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
         self.__model = model
