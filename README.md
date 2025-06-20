@@ -10,7 +10,14 @@ cd Bridging-the-Chains
 - Create a file named `hf_token.txt` in the root directory and paste your Hugging Face token into it.
 - If you are running experiments that require external API calls (N1, N2, N3), add your Gemma API key in `core/experiment_config.py`
 
-### 3. Run an Experiment
+### 3. Install Dependencies
+```bash
+conda create --name csnlp python=3.12
+conda activate csnlp
+pip install -r requirements.txt
+```
+
+### 4. Run an Experiment
 **Local Execution:** Run the main script using the default configuration from `core/experiment_config.py`:
 ```bash
 python -m core.main
