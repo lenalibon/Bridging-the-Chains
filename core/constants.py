@@ -2,7 +2,6 @@ from typing import Callable
 
 import torch
 
-# TODO: At some point it would be nicer to have this as a config like a yaml
 
 TokenIdsTensor = torch.Tensor # size: (sequence_length,)
 BatchedTokenIdsTensor = torch.Tensor # size: (batch_size, sequence_length)

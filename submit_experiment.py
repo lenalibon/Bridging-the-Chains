@@ -14,14 +14,10 @@ import torch
 import time
 import subprocess
 
-# -------------------------------------
-# Load model and tokenizer
-# -------------------------------------
+# Code to submit job in SLURM or run locally
 def get_model_and_tokenizer(config):
     model_name = config.model_name 
-    # model_name = "Qwen/Qwen2.5-0.5B-Instruct"
     tokenizer = AutoTokenizer.from_pretrained(model_name, token=config.hf_token, padding_side='left')
-    # model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=BitsAndBytesConfig(load_in_8bit=True))
     model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.float32,
@@ -31,13 +27,10 @@ def get_model_and_tokenizer(config):
     return model, tokenizer
 
 
-# -------------------------------------
-# Core experiment runner
-# -------------------------------------
+
 def run_wrapper(config):
-    config.hf_token = "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"
-    #assert config.hf_token != "TODO: fill in", "Please set the Hugging Face token."
-    #config.model, config.tokenizer = get_model_and_tokenizer(config)
+    assert config.hf_token != "TODO: fill in", "Please set the Hugging Face token."
+    config.model, config.tokenizer = get_model_and_tokenizer(config)
 
     os.environ['TORCH_COMPILE_DISABLE'] = '1'
     os.environ["TORCHDYNAMO_DISABLE"] = "1"
@@ -47,9 +40,6 @@ def run_wrapper(config):
     fire.Fire(exp.eval)
 
 
-# -------------------------------------
-# Submission wrapper (local or SLURM)
-# -------------------------------------
 def run(local = True):
 
     for _ in range(200):
@@ -82,12 +72,7 @@ def run(local = True):
 
         time.sleep(5 * 60)  # Wait 5 minutes before checking again
 
-# -------------------------------------
-# Entry point
-# -------------------------------------
+
 if __name__ == "__main__":
     # Set `local=False` to submit to SLURM
     run(local=False)
-#eval "$(micromamba shell hook --shell bash)"
-#micromamba activate ~/micromamba_envs/myenv
-# python submit_experiment.py
