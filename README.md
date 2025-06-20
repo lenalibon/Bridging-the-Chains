@@ -44,6 +44,11 @@ Each line in the `.jsonl` file contains:
 - Failed sample IDs are stored in `results/error_ids.txt`.
 
 ## Evaluation
+Create the environment to compute the metrics with:
+```bash
+conda env create -f metrics/chains.yml
+```
+
 ### Optional: Merge Multiple Result Files
 If your run was interrupted and you have several `.jsonl` result files, merge them with:
 1. Set the `input_folder` and `output_path` in `merge.py`
