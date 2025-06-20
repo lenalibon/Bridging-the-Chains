@@ -1,4 +1,4 @@
-# Bridging the Chains
+# Bridging the Chains: Clustering and Chain Fusion for Enhanced Chain-of-Thought Reasoning
 ## Getting Started
 ### 1. Clone the Repository
 ```bash
